@@ -1,5 +1,9 @@
+#![feature(maybe_uninit_uninit_array)]
+
 mod device_info;
 mod render;
+mod queues;
+
 use device_info::DeviceInfo;
 
 use bevy::prelude::*;
@@ -7,7 +11,13 @@ use bevy::prelude::*;
 use ash::vk;
 use bevy::window::WindowCreated;
 use bevy::winit::WinitWindows;
+use std::borrow::Cow;
 use std::ffi::CStr;
+
+
+pub type Allocator = gpu_alloc::GpuAllocator<vk::DeviceMemory>;
+pub use queues::Queues;
+
 
 #[derive(Default)]
 pub struct DustPlugin;
@@ -15,33 +25,7 @@ pub struct DustPlugin;
 impl Plugin for DustPlugin {
     fn build(&self, app: &mut App) {
         app.add_startup_system_to_stage(StartupStage::PreStartup, setup)
-            .add_startup_system_to_stage(StartupStage::Startup, render::setup)
-            .add_system(render::rebuild.label("rebuild swapchain on resize"))
-            .add_system(render::update.after("rebuild swapchain on resize"));
-    }
-}
-
-struct Queues {
-    graphics_queue_family: u32,
-    transfer_binding_queue_family: u32,
-    graphics_queue: vk::Queue,
-    transfer_binding_queue: vk::Queue,
-}
-
-impl Queues {
-    pub unsafe fn new(
-        device: &ash::Device,
-        graphics_queue_family: u32,
-        transfer_binding_queue_family: u32,
-    ) -> Queues {
-        let graphics_queue = device.get_device_queue(graphics_queue_family, 0);
-        let transfer_binding_queue = device.get_device_queue(transfer_binding_queue_family, 0);
-        Queues {
-            graphics_queue,
-            transfer_binding_queue,
-            graphics_queue_family,
-            transfer_binding_queue_family,
-        }
+            .add_plugin(render::RenderPlugin::default());
     }
 }
 
@@ -214,6 +198,33 @@ fn setup(
             graphics_queue_family,
             transfer_binding_queue_family,
         );
+
+
+        {
+            use gpu_alloc::{Config, DeviceProperties, MemoryType, MemoryHeap};
+            use gpu_alloc_ash::memory_properties_from_ash;
+            let config = Config::i_am_prototyping();
+            
+            let allocator: Allocator = Allocator::new(config, DeviceProperties {
+                memory_types: Cow::Owned(device_info.memory_types().iter()
+                .map(|memory_type| MemoryType {
+                    props: memory_properties_from_ash(memory_type.property_flags),
+                    heap: memory_type.heap_index,
+                })
+                .collect()),
+                memory_heaps: Cow::Owned(device_info.memory_heaps().iter()
+                .map(|&memory_heap| MemoryHeap {
+                    size: memory_heap.size,
+                })
+                .collect()),
+                max_memory_allocation_count: device_info.physical_device_properties.limits.max_memory_allocation_count,
+                max_memory_allocation_size: u64::MAX,
+                non_coherent_atom_size: device_info.physical_device_properties.limits.non_coherent_atom_size,
+                buffer_device_address: device_info.buffer_device_address_features.buffer_device_address != 0,
+            });
+            commands.insert_resource(allocator);
+        }
+
         commands.insert_resource(ash::extensions::khr::AccelerationStructure::new(
             &instance, &device,
         ));

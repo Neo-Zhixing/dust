@@ -17,3 +17,5 @@ features = [
 [dependencies]
 ash = "0.33"
 ash-window = "0.7"
+gpu-alloc = "0.5.0"
+gpu-alloc-ash = "0.2.0"

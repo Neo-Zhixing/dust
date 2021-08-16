@@ -1,6 +1,4 @@
-#![feature(maybe_uninit_uninit_array)]
 
-mod renderer;
 
 use bevy::prelude::*;
 
@@ -11,6 +9,6 @@ fn main() {
         .add_plugin(bevy::input::InputPlugin::default())
         .add_plugin(bevy::window::WindowPlugin::default())
         .add_plugin(bevy::winit::WinitPlugin::default())
-        .add_plugin(renderer::DustPlugin::default())
+        .add_plugin(dust_new::DustPlugin::default())
         .run();
 }
