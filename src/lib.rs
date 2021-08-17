@@ -18,6 +18,7 @@ use std::ffi::CStr;
 pub type Allocator = gpu_alloc::GpuAllocator<vk::DeviceMemory>;
 pub type MemoryBlock = gpu_alloc::MemoryBlock<vk::DeviceMemory>;
 pub use queues::Queues;
+pub use tlas::TlasAABB;
 
 #[derive(Default)]
 pub struct DustPlugin;
@@ -107,7 +108,7 @@ fn setup(
             (physical_device, device_info)
         };
         let surface_loader = ash::extensions::khr::Surface::new(&entry, &instance);
-        let (graphics_queue_family, compute_queue_family,  transfer_binding_queue_family) = {
+        let (graphics_queue_family, compute_queue_family, transfer_binding_queue_family) = {
             let available_queue_family =
                 instance.get_physical_device_queue_family_properties(physical_device);
             let graphics_queue_family = available_queue_family
@@ -122,24 +123,20 @@ fn setup(
                 .unwrap()
                 .0 as u32;
             let compute_queue_family = available_queue_family
-            .iter()
-            .enumerate()
-            .find(|&(_, family)| {
-                !family.queue_flags.contains(vk::QueueFlags::GRAPHICS)
-                    && family.queue_flags.contains(vk::QueueFlags::COMPUTE)
-            })
-            .or_else(|| {
-                available_queue_family
-                    .iter()
-                    .enumerate()
-                    .find(|&(_, family)| {
-                        family.queue_flags.contains(
-                                vk::QueueFlags::COMPUTE,
-                            )
-                    })
-            })
-            .unwrap()
-            .0 as u32;
+                .iter()
+                .enumerate()
+                .find(|&(_, family)| {
+                    !family.queue_flags.contains(vk::QueueFlags::GRAPHICS)
+                        && family.queue_flags.contains(vk::QueueFlags::COMPUTE)
+                })
+                .or_else(|| {
+                    available_queue_family
+                        .iter()
+                        .enumerate()
+                        .find(|&(_, family)| family.queue_flags.contains(vk::QueueFlags::COMPUTE))
+                })
+                .unwrap()
+                .0 as u32;
             let transfer_binding_queue_family = available_queue_family
                 .iter()
                 .enumerate()
@@ -173,7 +170,11 @@ fn setup(
                 })
                 .unwrap()
                 .0 as u32;
-            (graphics_queue_family, compute_queue_family, transfer_binding_queue_family)
+            (
+                graphics_queue_family,
+                compute_queue_family,
+                transfer_binding_queue_family,
+            )
         };
         let device = instance
             .create_device(

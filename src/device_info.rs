@@ -30,9 +30,9 @@ impl DeviceInfo {
             &mut acceleration_structure_features as *mut _ as *mut c_void;
         instance.get_physical_device_features2(physical_device, &mut features);
 
-
         let mut properties2 = vk::PhysicalDeviceProperties2::default();
-        let mut acceleration_structure_properties = vk::PhysicalDeviceAccelerationStructurePropertiesKHR::default();
+        let mut acceleration_structure_properties =
+            vk::PhysicalDeviceAccelerationStructurePropertiesKHR::default();
         properties2.p_next = &mut acceleration_structure_properties as *mut _ as *mut c_void;
         instance.get_physical_device_properties2(physical_device, &mut properties2);
 

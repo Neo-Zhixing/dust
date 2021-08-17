@@ -1,16 +1,24 @@
-struct RaytracedEntity;
 use ash::vk;
 use bevy::prelude::*;
 use gpu_alloc_ash::AshMemoryDevice;
 
-use crate::{Queues, device_info::DeviceInfo};
+use crate::{device_info::DeviceInfo, Queues};
 
+#[derive(Debug)]
+pub struct TlasAABB {
+    pub aabb_min: bevy::math::Vec3,
+    pub aabb_max: bevy::math::Vec3,
+}
 #[derive(Default)]
 pub struct TlasPlugin;
 
 impl Plugin for TlasPlugin {
     fn build(&self, app: &mut App) {
-        app.add_startup_system_to_stage(StartupStage::Startup, tlas_setup);
+        app.add_startup_system_to_stage(StartupStage::Startup, tlas_setup)
+            .add_system_to_stage(
+                CoreStage::PostUpdate,
+                tlas_update.after(bevy::transform::TransformSystem::TransformPropagate),
+            );
     }
 }
 
@@ -65,7 +73,10 @@ fn tlas_setup(
             .create_buffer(
                 &vk::BufferCreateInfo::builder()
                     .size(std::mem::size_of_val(&unit_box) as u64)
-                    .usage(vk::BufferUsageFlags::ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_KHR | vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS)
+                    .usage(
+                        vk::BufferUsageFlags::ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_KHR
+                            | vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS,
+                    )
                     .sharing_mode(vk::SharingMode::EXCLUSIVE)
                     .build(),
                 None,
@@ -85,14 +96,16 @@ fn tlas_setup(
                 },
             )
             .unwrap();
-        unit_box_mem.write_bytes(
-            AshMemoryDevice::wrap(&device),
-            0,
-            std::slice::from_raw_parts(
-                &unit_box as *const _ as *const u8,
-                std::mem::size_of_val(&unit_box),
-            ),
-        ).unwrap();
+        unit_box_mem
+            .write_bytes(
+                AshMemoryDevice::wrap(&device),
+                0,
+                std::slice::from_raw_parts(
+                    &unit_box as *const _ as *const u8,
+                    std::mem::size_of_val(&unit_box),
+                ),
+            )
+            .unwrap();
         device
             .bind_buffer_memory(
                 unit_box_buffer,
@@ -102,8 +115,8 @@ fn tlas_setup(
             .unwrap();
         let unit_box_device_address = device.get_buffer_device_address(
             &vk::BufferDeviceAddressInfo::builder()
-            .buffer(unit_box_buffer)
-            .build()
+                .buffer(unit_box_buffer)
+                .build(),
         );
         let mut build_geometry_info = vk::AccelerationStructureBuildGeometryInfoKHR::builder()
             .ty(vk::AccelerationStructureTypeKHR::BOTTOM_LEVEL)
@@ -115,7 +128,7 @@ fn tlas_setup(
                 .geometry(vk::AccelerationStructureGeometryDataKHR {
                     aabbs: vk::AccelerationStructureGeometryAabbsDataKHR::builder()
                         .data(vk::DeviceOrHostAddressConstKHR {
-                            device_address: unit_box_device_address
+                            device_address: unit_box_device_address,
                         })
                         .stride(std::mem::size_of_val(&unit_box) as u64)
                         .build(),
@@ -127,7 +140,7 @@ fn tlas_setup(
             &build_geometry_info,
             &[1],
         );
-        
+
         let unit_box_as_buf = device
             .create_buffer(
                 &vk::BufferCreateInfo::builder()
@@ -159,19 +172,24 @@ fn tlas_setup(
             )
             .unwrap();
 
-        
-        let scratch_alignment = device_info.acceleration_structure_properties.min_acceleration_structure_scratch_offset_alignment as u64;
+        let scratch_alignment = device_info
+            .acceleration_structure_properties
+            .min_acceleration_structure_scratch_offset_alignment
+            as u64;
         let scratch_buf = device
-        .create_buffer(
-            &vk::BufferCreateInfo::builder()
-                .flags(vk::BufferCreateFlags::default())
-                .size(sizes.build_scratch_size + scratch_alignment)
-                .usage(vk::BufferUsageFlags::STORAGE_BUFFER | vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS)
-                .sharing_mode(vk::SharingMode::EXCLUSIVE)
-                .build(),
-            None,
-        )
-        .unwrap();
+            .create_buffer(
+                &vk::BufferCreateInfo::builder()
+                    .flags(vk::BufferCreateFlags::default())
+                    .size(sizes.build_scratch_size + scratch_alignment)
+                    .usage(
+                        vk::BufferUsageFlags::STORAGE_BUFFER
+                            | vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS,
+                    )
+                    .sharing_mode(vk::SharingMode::EXCLUSIVE)
+                    .build(),
+                None,
+            )
+            .unwrap();
         let scratch_requirements = device.get_buffer_memory_requirements(scratch_buf);
 
         let scratch_mem = allocator
@@ -187,14 +205,18 @@ fn tlas_setup(
                 },
             )
             .unwrap();
-        device.bind_buffer_memory(scratch_buf, *scratch_mem.memory(), scratch_mem.offset()).unwrap();
+        device
+            .bind_buffer_memory(scratch_buf, *scratch_mem.memory(), scratch_mem.offset())
+            .unwrap();
         let scratch_device_address = device.get_buffer_device_address(
             &vk::BufferDeviceAddressInfo::builder()
                 .buffer(scratch_buf)
                 .build(),
         );
         // Round up
-        let scratch_device_address = ((scratch_device_address + scratch_alignment - 1) / scratch_alignment) * scratch_alignment;
+        let scratch_device_address = ((scratch_device_address + scratch_alignment - 1)
+            / scratch_alignment)
+            * scratch_alignment;
         let unit_box_as = acceleration_structure_loader
             .create_acceleration_structure(
                 &vk::AccelerationStructureCreateInfoKHR::builder()
@@ -238,8 +260,7 @@ fn tlas_setup(
                 vk::Fence::null(),
             )
             .unwrap();
-        
-        
+
         // Free memory
         device.destroy_buffer(scratch_buf, None);
         allocator.dealloc(AshMemoryDevice::wrap(&device), scratch_mem);
@@ -254,3 +275,11 @@ fn tlas_setup(
     }
 }
 
+fn tlas_update(
+    mut commands: Commands,
+    query: Query<(&GlobalTransform, &TlasAABB), Or<(Changed<GlobalTransform>, Changed<TlasAABB>)>>,
+) {
+    for (transform, aabb) in query.iter() {
+        println!("{:?} {:?}", transform, aabb);
+    }
+}

@@ -1,7 +1,7 @@
-
+use std::str::FromStr;
 
 use bevy::prelude::*;
-
+use dust_new::TlasAABB;
 fn main() {
     App::new()
         .add_plugin(bevy::core::CorePlugin::default())
@@ -10,5 +10,17 @@ fn main() {
         .add_plugin(bevy::window::WindowPlugin::default())
         .add_plugin(bevy::winit::WinitPlugin::default())
         .add_plugin(dust_new::DustPlugin::default())
+        .add_startup_system(setup)
         .run();
+}
+
+fn setup(mut commands: Commands) {
+    commands
+        .spawn()
+        .insert(TlasAABB {
+            aabb_min: bevy::math::Vec3::new(0.0, 0.0, 0.0),
+            aabb_max: bevy::math::Vec3::new(1.0, 2.0, 1.0),
+        })
+        .insert(GlobalTransform::default())
+        .insert(Transform::default());
 }
