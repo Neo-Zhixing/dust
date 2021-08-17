@@ -1,8 +1,9 @@
 #![feature(maybe_uninit_uninit_array)]
 
 mod device_info;
-mod render;
 mod queues;
+mod render;
+mod tlas;
 
 use device_info::DeviceInfo;
 
@@ -14,10 +15,8 @@ use bevy::winit::WinitWindows;
 use std::borrow::Cow;
 use std::ffi::CStr;
 
-
 pub type Allocator = gpu_alloc::GpuAllocator<vk::DeviceMemory>;
 pub use queues::Queues;
-
 
 #[derive(Default)]
 pub struct DustPlugin;
@@ -25,7 +24,8 @@ pub struct DustPlugin;
 impl Plugin for DustPlugin {
     fn build(&self, app: &mut App) {
         app.add_startup_system_to_stage(StartupStage::PreStartup, setup)
-            .add_plugin(render::RenderPlugin::default());
+            .add_plugin(render::RenderPlugin::default())
+            .add_plugin(tlas::TlasPlugin::default());
     }
 }
 
@@ -106,7 +106,7 @@ fn setup(
             (physical_device, device_info)
         };
         let surface_loader = ash::extensions::khr::Surface::new(&entry, &instance);
-        let (graphics_queue_family, transfer_binding_queue_family) = {
+        let (graphics_queue_family, compute_queue_family,  transfer_binding_queue_family) = {
             let available_queue_family =
                 instance.get_physical_device_queue_family_properties(physical_device);
             let graphics_queue_family = available_queue_family
@@ -120,6 +120,25 @@ fn setup(
                 })
                 .unwrap()
                 .0 as u32;
+            let compute_queue_family = available_queue_family
+            .iter()
+            .enumerate()
+            .find(|&(_, family)| {
+                !family.queue_flags.contains(vk::QueueFlags::GRAPHICS)
+                    && family.queue_flags.contains(vk::QueueFlags::COMPUTE)
+            })
+            .or_else(|| {
+                available_queue_family
+                    .iter()
+                    .enumerate()
+                    .find(|&(_, family)| {
+                        family.queue_flags.contains(
+                                vk::QueueFlags::COMPUTE,
+                            )
+                    })
+            })
+            .unwrap()
+            .0 as u32;
             let transfer_binding_queue_family = available_queue_family
                 .iter()
                 .enumerate()
@@ -153,7 +172,7 @@ fn setup(
                 })
                 .unwrap()
                 .0 as u32;
-            (graphics_queue_family, transfer_binding_queue_family)
+            (graphics_queue_family, compute_queue_family, transfer_binding_queue_family)
         };
         let device = instance
             .create_device(
@@ -165,11 +184,20 @@ fn setup(
                             .queue_priorities(&[1.0])
                             .build(),
                         vk::DeviceQueueCreateInfo::builder()
+                            .queue_family_index(compute_queue_family)
+                            .queue_priorities(&[0.1])
+                            .build(),
+                        vk::DeviceQueueCreateInfo::builder()
                             .queue_family_index(transfer_binding_queue_family)
                             .queue_priorities(&[0.5])
                             .build(),
                     ])
-                    .enabled_extension_names(&[ash::extensions::khr::Swapchain::name().as_ptr()])
+                    .enabled_extension_names(&[
+                        ash::extensions::khr::Swapchain::name().as_ptr(),
+                        ash::extensions::khr::AccelerationStructure::name().as_ptr(),
+                        ash::extensions::khr::DeferredHostOperations::name().as_ptr(),
+                        ash::extensions::khr::RayTracingPipeline::name().as_ptr(),
+                    ])
                     .enabled_features(&vk::PhysicalDeviceFeatures {
                         sparse_binding: 1,
                         sparse_residency_buffer: 1,
@@ -189,6 +217,21 @@ fn setup(
                         &mut vk::PhysicalDevice8BitStorageFeatures::builder()
                             .uniform_and_storage_buffer8_bit_access(true)
                             .build(),
+                    )
+                    .push_next(
+                        &mut vk::PhysicalDeviceBufferDeviceAddressFeatures::builder()
+                            .buffer_device_address(true)
+                            .build(),
+                    )
+                    .push_next(
+                        &mut vk::PhysicalDeviceAccelerationStructureFeaturesKHR::builder()
+                            .acceleration_structure(true)
+                            .build(),
+                    )
+                    .push_next(
+                        &mut vk::PhysicalDeviceRayTracingPipelineFeaturesKHR::builder()
+                            .ray_tracing_pipeline(true)
+                            .build(),
                     ),
                 None,
             )
@@ -196,32 +239,52 @@ fn setup(
         let queues = Queues::new(
             &device,
             graphics_queue_family,
+            compute_queue_family,
             transfer_binding_queue_family,
         );
 
-
         {
-            use gpu_alloc::{Config, DeviceProperties, MemoryType, MemoryHeap};
+            use gpu_alloc::{Config, DeviceProperties, MemoryHeap, MemoryType};
             use gpu_alloc_ash::memory_properties_from_ash;
             let config = Config::i_am_prototyping();
-            
-            let allocator: Allocator = Allocator::new(config, DeviceProperties {
-                memory_types: Cow::Owned(device_info.memory_types().iter()
-                .map(|memory_type| MemoryType {
-                    props: memory_properties_from_ash(memory_type.property_flags),
-                    heap: memory_type.heap_index,
-                })
-                .collect()),
-                memory_heaps: Cow::Owned(device_info.memory_heaps().iter()
-                .map(|&memory_heap| MemoryHeap {
-                    size: memory_heap.size,
-                })
-                .collect()),
-                max_memory_allocation_count: device_info.physical_device_properties.limits.max_memory_allocation_count,
-                max_memory_allocation_size: u64::MAX,
-                non_coherent_atom_size: device_info.physical_device_properties.limits.non_coherent_atom_size,
-                buffer_device_address: device_info.buffer_device_address_features.buffer_device_address != 0,
-            });
+
+            let allocator: Allocator = Allocator::new(
+                config,
+                DeviceProperties {
+                    memory_types: Cow::Owned(
+                        device_info
+                            .memory_types()
+                            .iter()
+                            .map(|memory_type| MemoryType {
+                                props: memory_properties_from_ash(memory_type.property_flags),
+                                heap: memory_type.heap_index,
+                            })
+                            .collect(),
+                    ),
+                    memory_heaps: Cow::Owned(
+                        device_info
+                            .memory_heaps()
+                            .iter()
+                            .map(|&memory_heap| MemoryHeap {
+                                size: memory_heap.size,
+                            })
+                            .collect(),
+                    ),
+                    max_memory_allocation_count: device_info
+                        .physical_device_properties
+                        .limits
+                        .max_memory_allocation_count,
+                    max_memory_allocation_size: u64::MAX,
+                    non_coherent_atom_size: device_info
+                        .physical_device_properties
+                        .limits
+                        .non_coherent_atom_size,
+                    buffer_device_address: device_info
+                        .buffer_device_address_features
+                        .buffer_device_address
+                        != 0,
+                },
+            );
             commands.insert_resource(allocator);
         }
 

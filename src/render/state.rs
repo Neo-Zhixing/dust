@@ -28,7 +28,10 @@ pub struct RenderState {
 }
 
 impl RenderState {
-    pub(super) unsafe fn new(device: &ash::Device, graphics_queue_family_index: u32) -> RenderState {
+    pub(super) unsafe fn new(
+        device: &ash::Device,
+        graphics_queue_family_index: u32,
+    ) -> RenderState {
         let command_pool = device
             .create_command_pool(
                 &vk::CommandPoolCreateInfo::builder()
