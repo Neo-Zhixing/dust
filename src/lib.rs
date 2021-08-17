@@ -16,6 +16,7 @@ use std::borrow::Cow;
 use std::ffi::CStr;
 
 pub type Allocator = gpu_alloc::GpuAllocator<vk::DeviceMemory>;
+pub type MemoryBlock = gpu_alloc::MemoryBlock<vk::DeviceMemory>;
 pub use queues::Queues;
 
 #[derive(Default)]

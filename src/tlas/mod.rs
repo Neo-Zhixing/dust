@@ -14,7 +14,14 @@ impl Plugin for TlasPlugin {
     }
 }
 
+struct TlasState {
+    unit_box_as: vk::AccelerationStructureKHR,
+    unit_box_as_buf: vk::Buffer,
+    unit_box_as_mem: crate::MemoryBlock,
+}
+
 fn tlas_setup(
+    mut commands: Commands,
     device: Res<ash::Device>,
     mut allocator: ResMut<crate::Allocator>,
     queues: Res<Queues>,
@@ -121,7 +128,7 @@ fn tlas_setup(
             &[1],
         );
         
-        let acceleration_structure_buffer = device
+        let unit_box_as_buf = device
             .create_buffer(
                 &vk::BufferCreateInfo::builder()
                     .flags(vk::BufferCreateFlags::default())
@@ -132,23 +139,23 @@ fn tlas_setup(
                 None,
             )
             .unwrap();
-        let acceleration_structure_requirements = device.get_buffer_memory_requirements(acceleration_structure_buffer);
-        let acceleration_structure_mem = allocator
+        let unit_box_as_buf_requirements = device.get_buffer_memory_requirements(unit_box_as_buf);
+        let unit_box_as_mem = allocator
             .alloc(
                 AshMemoryDevice::wrap(&device),
                 gpu_alloc::Request {
-                    size: acceleration_structure_requirements.size,
-                    align_mask: acceleration_structure_requirements.alignment,
+                    size: unit_box_as_buf_requirements.size,
+                    align_mask: unit_box_as_buf_requirements.alignment,
                     usage: gpu_alloc::UsageFlags::FAST_DEVICE_ACCESS,
-                    memory_types: acceleration_structure_requirements.memory_type_bits,
+                    memory_types: unit_box_as_buf_requirements.memory_type_bits,
                 },
             )
             .unwrap();
         device
             .bind_buffer_memory(
-                acceleration_structure_buffer,
-                *acceleration_structure_mem.memory(),
-                acceleration_structure_mem.offset(),
+                unit_box_as_buf,
+                *unit_box_as_mem.memory(),
+                unit_box_as_mem.offset(),
             )
             .unwrap();
 
@@ -166,9 +173,6 @@ fn tlas_setup(
         )
         .unwrap();
         let scratch_requirements = device.get_buffer_memory_requirements(scratch_buf);
-        println!("scratch_requirements.alignment: {}", scratch_requirements.alignment);
-        println!("acceleration structure scratch offset alignment: {}", device_info.acceleration_structure_properties.min_acceleration_structure_scratch_offset_alignment);
-        
 
         let scratch_mem = allocator
             .alloc(
@@ -191,11 +195,10 @@ fn tlas_setup(
         );
         // Round up
         let scratch_device_address = ((scratch_device_address + scratch_alignment - 1) / scratch_alignment) * scratch_alignment;
-        println!("scratch device address {}", scratch_device_address);
-        let simple_box_as = acceleration_structure_loader
+        let unit_box_as = acceleration_structure_loader
             .create_acceleration_structure(
                 &vk::AccelerationStructureCreateInfoKHR::builder()
-                    .buffer(acceleration_structure_buffer)
+                    .buffer(unit_box_as_buf)
                     .offset(0)
                     .size(sizes.acceleration_structure_size)
                     .ty(vk::AccelerationStructureTypeKHR::BOTTOM_LEVEL)
@@ -204,7 +207,7 @@ fn tlas_setup(
                 None,
             )
             .unwrap();
-        build_geometry_info.dst_acceleration_structure = simple_box_as;
+        build_geometry_info.dst_acceleration_structure = unit_box_as;
         build_geometry_info.scratch_data.device_address = scratch_device_address;
 
         device
@@ -235,5 +238,19 @@ fn tlas_setup(
                 vk::Fence::null(),
             )
             .unwrap();
+        
+        
+        // Free memory
+        device.destroy_buffer(scratch_buf, None);
+        allocator.dealloc(AshMemoryDevice::wrap(&device), scratch_mem);
+        device.destroy_buffer(unit_box_buffer, None);
+        allocator.dealloc(AshMemoryDevice::wrap(&device), unit_box_mem);
+        let tlas_state = TlasState {
+            unit_box_as,
+            unit_box_as_buf,
+            unit_box_as_mem,
+        };
+        commands.insert_resource(tlas_state);
     }
 }
+
