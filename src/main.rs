@@ -1,7 +1,7 @@
 use std::str::FromStr;
 
 use bevy::prelude::*;
-use dust_new::TlasAABB;
+use dust_new::Raytraced;
 fn main() {
     App::new()
         .add_plugin(bevy::core::CorePlugin::default())
@@ -17,9 +17,8 @@ fn main() {
 fn setup(mut commands: Commands) {
     commands
         .spawn()
-        .insert(TlasAABB {
-            aabb_min: bevy::math::Vec3::new(0.0, 0.0, 0.0),
-            aabb_max: bevy::math::Vec3::new(1.0, 2.0, 1.0),
+        .insert(Raytraced {
+            aabb_extent: bevy::math::Vec3::new(1.0, 2.0, 1.0),
         })
         .insert(GlobalTransform::default())
         .insert(Transform::default());
