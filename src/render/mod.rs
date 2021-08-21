@@ -1,5 +1,6 @@
 mod commands;
 mod state;
+mod raytracer;
 
 use state::RenderState;
 
@@ -13,14 +14,17 @@ pub struct RenderPlugin;
 
 impl Plugin for RenderPlugin {
     fn build(&self, app: &mut App) {
-        app.add_startup_system_to_stage(StartupStage::Startup, setup)
+        app.add_startup_system(setup)
+            .add_startup_system(raytracer::raytracing_setup)
             .add_system(rebuild.label("rebuild swapchain on resize"))
-            .add_system(update.after("rebuild swapchain on resize"));
+            .add_system(commands::record_command_buffers_system.label("rebuild command buffers").after("rebuild swapchain on resize"))
+            .add_system(update.after("rebuild command buffers"));
     }
 }
 
-pub(super) fn setup(
+fn setup(
     mut commands: Commands,
+    mut swapchain_rebuilt_events: EventWriter<SwapchainRebuilt>,
     instance: Res<ash::Instance>,
     device: Res<ash::Device>,
     physical_device: Res<vk::PhysicalDevice>,
@@ -43,14 +47,17 @@ pub(super) fn setup(
             &surface_loader,
             &swapchain_loader,
         );
-        commands::record_command_buffers(&device, &render_state);
+        swapchain_rebuilt_events.send(SwapchainRebuilt);
         commands.insert_resource(swapchain_loader);
         commands.insert_resource(render_state);
     }
 }
 
+pub struct SwapchainRebuilt;
+
 pub(super) fn rebuild(
     mut window_resized_events: EventReader<bevy::window::WindowResized>,
+    mut swapchain_rebuilt_events: EventWriter<SwapchainRebuilt>,
     device: Res<ash::Device>,
     mut render_state: ResMut<RenderState>,
     swapchain_loader: Res<ash::extensions::khr::Swapchain>,
@@ -78,8 +85,8 @@ pub(super) fn rebuild(
             swapchain_loader,
         );
         render_state.reset_commands(device);
-        commands::record_command_buffers(&device, &render_state);
     }
+    swapchain_rebuilt_events.send(SwapchainRebuilt);
 }
 
 pub(super) fn update(

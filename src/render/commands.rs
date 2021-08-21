@@ -1,8 +1,17 @@
 use ash::vk;
 
-use super::RenderState;
+use super::{RenderState, SwapchainRebuilt};
+use bevy::prelude::*;
 
-pub(super) fn record_command_buffers(device: &ash::Device, render_state: &RenderState) {
+pub(super) fn record_command_buffers_system(
+    mut swapchain_rebuilt_events: EventReader<SwapchainRebuilt>,
+    device: Res<ash::Device>,
+    render_state: Res<RenderState>,
+    raytracing_pipeline_loader: Res<ash::extensions::khr::RayTracingPipeline>,
+) {
+    if swapchain_rebuilt_events.iter().next().is_none() {
+        return;
+    }
     unsafe {
         for swapchain_image in render_state.swapchain_images.iter() {
             let command_buffer = swapchain_image.command_buffer;
@@ -35,6 +44,18 @@ pub(super) fn record_command_buffers(device: &ash::Device, render_state: &Render
                     extent: render_state.extent,
                 }],
             );
+            /*
+            raytracing_pipeline_loader.cmd_trace_rays(
+                command_buffer,
+                raygen_shader_binding_tables,
+                miss_shader_binding_tables,
+                hit_shader_binding_tables,
+                callable_shader_binding_tables,
+                render_state.extent.width,
+                render_state.extent.height,
+                1
+            );
+            */
             device.cmd_pipeline_barrier(
                 command_buffer,
                 vk::PipelineStageFlags::COMPUTE_SHADER,

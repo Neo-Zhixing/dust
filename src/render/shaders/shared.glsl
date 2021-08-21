@@ -1,0 +1,3 @@
+struct RayPayload {
+    float hitSky;
+};
