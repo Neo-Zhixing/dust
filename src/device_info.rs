@@ -5,6 +5,7 @@ pub struct DeviceInfo {
     supported_extensions: Vec<vk::ExtensionProperties>,
     pub physical_device_properties: vk::PhysicalDeviceProperties,
     pub acceleration_structure_properties: vk::PhysicalDeviceAccelerationStructurePropertiesKHR,
+    pub raytracing_pipeline_properties: vk::PhysicalDeviceRayTracingPipelinePropertiesKHR,
     memory_properties: vk::PhysicalDeviceMemoryProperties,
     // TODO: use proc macro to generate bitfields for this
     pub features: vk::PhysicalDeviceFeatures,
@@ -33,13 +34,17 @@ impl DeviceInfo {
         let mut properties2 = vk::PhysicalDeviceProperties2::default();
         let mut acceleration_structure_properties =
             vk::PhysicalDeviceAccelerationStructurePropertiesKHR::default();
+        let mut raytracing_pipeline_properties =
+            vk::PhysicalDeviceRayTracingPipelinePropertiesKHR::default();
         properties2.p_next = &mut acceleration_structure_properties as *mut _ as *mut c_void;
+        acceleration_structure_properties.p_next = &mut raytracing_pipeline_properties as *mut _ as *mut c_void;
         instance.get_physical_device_properties2(physical_device, &mut properties2);
 
         Self {
             supported_extensions: entry.enumerate_instance_extension_properties().unwrap(),
             physical_device_properties: properties2.properties,
-            acceleration_structure_properties: acceleration_structure_properties,
+            acceleration_structure_properties,
+            raytracing_pipeline_properties,
             memory_properties: instance.get_physical_device_memory_properties(physical_device),
             features: features.features,
             buffer_device_address_features,

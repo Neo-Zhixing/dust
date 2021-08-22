@@ -14,7 +14,8 @@ pub struct RenderPlugin;
 
 impl Plugin for RenderPlugin {
     fn build(&self, app: &mut App) {
-        app.add_startup_system(setup)
+        app.add_event::<SwapchainRebuilt>()
+            .add_startup_system(setup)
             .add_startup_system(raytracer::raytracing_setup)
             .add_system(rebuild.label("rebuild swapchain on resize"))
             .add_system(commands::record_command_buffers_system.label("rebuild command buffers").after("rebuild swapchain on resize"))

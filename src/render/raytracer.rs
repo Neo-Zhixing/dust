@@ -2,10 +2,13 @@ use bevy::prelude::*;
 use ash::vk;
 use std::{ffi::CStr, io::Cursor};
 
+use crate::device_info::DeviceInfo;
+
 pub(super) fn raytracing_setup(
     device: Res<ash::Device>,
     raytracing_loader: Res<ash::extensions::khr::RayTracingPipeline>,
     deferred_operation_loader: Res<ash::extensions::khr::DeferredHostOperations>,
+    device_info: Res<DeviceInfo>
 ) {
     unsafe {
         let pipeline_layout = device.create_pipeline_layout(
@@ -69,13 +72,7 @@ pub(super) fn raytracing_setup(
                             .closest_hit_shader(vk::SHADER_UNUSED_KHR)
                             .build() // TODO
                     ])
-                    .max_pipeline_ray_recursion_depth(3)
-                    .library_info(&vk::PipelineLibraryCreateInfoKHR::builder()
-                        .build()) // TOD
-                    .library_interface(&vk::RayTracingPipelineInterfaceCreateInfoKHR::builder()
-                        .max_pipeline_ray_payload_size(4)
-                        .max_pipeline_ray_hit_attribute_size(4)
-                        .build()) // TODO
+                    .max_pipeline_ray_recursion_depth(device_info.raytracing_pipeline_properties.max_ray_recursion_depth.max(1))
                     .layout(pipeline_layout) // TODO
                     .build()
             ],
