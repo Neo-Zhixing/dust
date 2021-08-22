@@ -1,10 +1,11 @@
 use std::path::Path;
 use shaderc::{IncludeCallbackResult, IncludeType, ResolvedInclude};
 
-const GLSL_ENTRY_FILES: [&str; 3] = [
+const GLSL_ENTRY_FILES: [&str; 4] = [
     "./src/render/shaders/closest_hit.rchit",
     "./src/render/shaders/miss.rmiss",
     "./src/render/shaders/raygen.rgen",
+    "./src/render/shaders/esvo.rint"
 ];
 const GLSL_INCLUDE_DIR: &str = "./src/render/shaders";
 const MAX_INCLUDE_DEPTH: usize = 10;

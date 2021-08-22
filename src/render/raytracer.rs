@@ -24,6 +24,16 @@ pub(super) fn raytracing_setup(
                 .unwrap(),)
                 .build(), None)
                 .expect("Cannot build raygen shader");
+
+        let intersection_shader_module = device.create_shader_module(
+            &vk::ShaderModuleCreateInfo::builder()
+                .flags(vk::ShaderModuleCreateFlags::empty())
+                .code(&ash::util::read_spv(&mut Cursor::new(
+                    &include_bytes!(concat!(env!("OUT_DIR"), "/shaders/esvo.rint.spv"))[..],
+                ))
+                .unwrap(),)
+                .build(), None)
+                .expect("Cannot build intersection shader");
         /*let deferred_operation = deferred_operation_loader
         .create_deferred_operation(None)
         .unwrap(); */
@@ -36,16 +46,27 @@ pub(super) fn raytracing_setup(
                     .stages(&[
                         vk::PipelineShaderStageCreateInfo::builder()
                             .flags(vk::PipelineShaderStageCreateFlags::default())
-                            .stage(vk::ShaderStageFlags::CLOSEST_HIT_KHR)
+                            .stage(vk::ShaderStageFlags::RAYGEN_KHR)
                             .module(raygen_shader_module)
-                            .name(CStr::from_bytes_with_nul_unchecked(b"closest hit\0"))
+                            .name(CStr::from_bytes_with_nul_unchecked(b"main\0"))
                             .specialization_info(&vk::SpecializationInfo::builder()
                                 .build())
-                            .build()
+                            .build(),
+                        vk::PipelineShaderStageCreateInfo::builder()
+                        .flags(vk::PipelineShaderStageCreateFlags::default())
+                        .stage(vk::ShaderStageFlags::INTERSECTION_KHR)
+                        .module(intersection_shader_module)
+                        .name(CStr::from_bytes_with_nul_unchecked(b"main\0"))
+                        .specialization_info(&vk::SpecializationInfo::builder()
+                            .build())
+                        .build()
                     ])
                     .groups(&[
                         vk::RayTracingShaderGroupCreateInfoKHR::builder()
                             .ty(vk::RayTracingShaderGroupTypeKHR::PROCEDURAL_HIT_GROUP)
+                            .intersection_shader(1)
+                            .any_hit_shader(vk::SHADER_UNUSED_KHR)
+                            .closest_hit_shader(vk::SHADER_UNUSED_KHR)
                             .build() // TODO
                     ])
                     .max_pipeline_ray_recursion_depth(3)

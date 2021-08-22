@@ -1,0 +1,11 @@
+#version 460
+#extension GL_EXT_ray_tracing : require
+
+#include "shared.glsl"
+
+
+void main()
+{	
+	vec3 aabb_min = gl_ObjectToWorldEXT * vec4(0, 0, 0, 1);
+	vec3 aabb_max = gl_ObjectToWorldEXT * vec4(1, 1, 1, 1);
+}
