@@ -473,9 +473,7 @@ fn tlas_update(
                 .buffer(scratch_buf)
                 .build(),
         );
-        let scratch_device_address = ((scratch_device_address + scratch_alignment - 1)
-            / scratch_alignment)
-            * scratch_alignment;
+        let scratch_device_address = crate::util::round_up(scratch_device_address, scratch_alignment);
 
         let as_buf = device
             .create_buffer(

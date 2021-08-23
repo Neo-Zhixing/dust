@@ -7,7 +7,6 @@ use crate::device_info::DeviceInfo;
 pub(super) fn raytracing_setup(
     device: Res<ash::Device>,
     raytracing_loader: Res<ash::extensions::khr::RayTracingPipeline>,
-    deferred_operation_loader: Res<ash::extensions::khr::DeferredHostOperations>,
     device_info: Res<DeviceInfo>
 ) {
     unsafe {
@@ -40,10 +39,15 @@ pub(super) fn raytracing_setup(
         /*let deferred_operation = deferred_operation_loader
         .create_deferred_operation(None)
         .unwrap(); */
-        let raytracing_pipelie = raytracing_loader.create_ray_tracing_pipelines(
+        let mut raytracing_pipeline = vk::Pipeline::null();
+        let result = raytracing_loader
+        .fp()
+        .create_ray_tracing_pipelines_khr(
+            device.handle(),
             vk::DeferredOperationKHR::null(),
             vk::PipelineCache::null(),
-            &[
+            1,
+            [
                 vk::RayTracingPipelineCreateInfoKHR::builder()
                     .flags(vk::PipelineCreateFlags::default())
                     .stages(&[
@@ -66,20 +70,43 @@ pub(super) fn raytracing_setup(
                     ])
                     .groups(&[
                         vk::RayTracingShaderGroupCreateInfoKHR::builder()
+                            .ty(vk::RayTracingShaderGroupTypeKHR::GENERAL)
+                            .general_shader(0)
+                            .intersection_shader(vk::SHADER_UNUSED_KHR)
+                            .any_hit_shader(vk::SHADER_UNUSED_KHR)
+                            .closest_hit_shader(vk::SHADER_UNUSED_KHR)
+                            .build(),
+                        vk::RayTracingShaderGroupCreateInfoKHR::builder()
                             .ty(vk::RayTracingShaderGroupTypeKHR::PROCEDURAL_HIT_GROUP)
                             .intersection_shader(1)
                             .any_hit_shader(vk::SHADER_UNUSED_KHR)
                             .closest_hit_shader(vk::SHADER_UNUSED_KHR)
-                            .build() // TODO
+                            .build(),
                     ])
                     .max_pipeline_ray_recursion_depth(device_info.raytracing_pipeline_properties.max_ray_recursion_depth.max(1))
                     .layout(pipeline_layout) // TODO
                     .build()
-            ],
-            None
-        )
-        .unwrap();
-        println!("{:?}", raytracing_pipelie);
+            ].as_ptr(),
+            std::ptr::null(),
+            &mut raytracing_pipeline
+        );
+        assert_eq!(result, vk::Result::SUCCESS);
+
+        
+        let layout = std::alloc::Layout::from_size_align(
+            device_info.raytracing_pipeline_properties.shader_group_handle_size as usize,
+            device_info.raytracing_pipeline_properties.shader_group_handle_alignment as usize
+        ).unwrap();
+        let (layout, _) = layout.repeat(2).unwrap(); // group size
+
+        let handles = raytracing_loader.get_ray_tracing_shader_group_handles(
+            raytracing_pipeline,
+            0,
+            2, 
+            layout.size(),
+        ).unwrap();
+        
+        //println!("{:?}", raytracing_pipelie);
     }
 
 }

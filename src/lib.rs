@@ -1,9 +1,11 @@
 #![feature(maybe_uninit_uninit_array)]
+#![feature(alloc_layout_extra)]
 
 mod device_info;
 mod queues;
 mod render;
 mod tlas;
+mod util;
 
 use device_info::DeviceInfo;
 
