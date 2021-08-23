@@ -50,6 +50,16 @@ pub(super) fn raytracing_setup(
                 .unwrap(),)
                 .build(), None)
                 .expect("Cannot build intersection shader");
+
+        let miss_shader_module = device.create_shader_module(
+            &vk::ShaderModuleCreateInfo::builder()
+                .flags(vk::ShaderModuleCreateFlags::empty())
+                .code(&ash::util::read_spv(&mut Cursor::new(
+                    &include_bytes!(concat!(env!("OUT_DIR"), "/shaders/miss.rmiss.spv"))[..],
+                ))
+                .unwrap(),)
+                .build(), None)
+                .expect("Cannot build miss shader");
         /*let deferred_operation = deferred_operation_loader
         .create_deferred_operation(None)
         .unwrap(); */
@@ -74,6 +84,14 @@ pub(super) fn raytracing_setup(
                                 .build())
                             .build(),
                         vk::PipelineShaderStageCreateInfo::builder()
+                            .flags(vk::PipelineShaderStageCreateFlags::default())
+                            .stage(vk::ShaderStageFlags::MISS_KHR)
+                            .module(miss_shader_module)
+                            .name(CStr::from_bytes_with_nul_unchecked(b"main\0"))
+                            .specialization_info(&vk::SpecializationInfo::builder()
+                                .build())
+                            .build(),
+                        vk::PipelineShaderStageCreateInfo::builder()
                         .flags(vk::PipelineShaderStageCreateFlags::default())
                         .stage(vk::ShaderStageFlags::INTERSECTION_KHR)
                         .module(intersection_shader_module)
@@ -91,8 +109,15 @@ pub(super) fn raytracing_setup(
                             .closest_hit_shader(vk::SHADER_UNUSED_KHR)
                             .build(),
                         vk::RayTracingShaderGroupCreateInfoKHR::builder()
+                            .ty(vk::RayTracingShaderGroupTypeKHR::GENERAL)
+                            .general_shader(1)
+                            .intersection_shader(vk::SHADER_UNUSED_KHR)
+                            .any_hit_shader(vk::SHADER_UNUSED_KHR)
+                            .closest_hit_shader(vk::SHADER_UNUSED_KHR)
+                            .build(),
+                        vk::RayTracingShaderGroupCreateInfoKHR::builder()
                             .ty(vk::RayTracingShaderGroupTypeKHR::PROCEDURAL_HIT_GROUP)
-                            .intersection_shader(1)
+                            .intersection_shader(2)
                             .any_hit_shader(vk::SHADER_UNUSED_KHR)
                             .closest_hit_shader(vk::SHADER_UNUSED_KHR)
                             .build(),
@@ -113,13 +138,13 @@ pub(super) fn raytracing_setup(
         ).unwrap();
         let sbt_group_layout = sbt_entry_layout.align_to(device_info.raytracing_pipeline_properties.shader_group_base_alignment as usize).unwrap();
 
-        let (sbt_layout, _) = sbt_group_layout.repeat(2).unwrap(); // group size
+        let (sbt_layout, _) = sbt_group_layout.repeat(3).unwrap(); // group size
 
         let sbt_handles_host = raytracing_loader.get_ray_tracing_shader_group_handles(
             raytracing_pipeline,
             0,
-            2, 
-            device_info.raytracing_pipeline_properties.shader_group_handle_size as usize * 2,
+            3, 
+            device_info.raytracing_pipeline_properties.shader_group_handle_size as usize * 3,
         ).unwrap();
         // Now, copy the sbt to device memory
         let sbt_buf = device.create_buffer(
@@ -155,7 +180,7 @@ pub(super) fn raytracing_setup(
             // copy the sbt to vram
             let mut host_ptr = sbt_handles_host.as_ptr();
             let mut device_ptr = sbt_handles_device.as_ptr();
-            for _ in 0..2 {
+            for _ in 0..3 {
                 std::ptr::copy_nonoverlapping(host_ptr, device_ptr, device_info.raytracing_pipeline_properties.shader_group_handle_size as usize);
                 host_ptr = host_ptr.add(device_info.raytracing_pipeline_properties.shader_group_handle_size as usize);
                 device_ptr = device_ptr.add(sbt_group_layout.pad_to_align().size());
@@ -176,9 +201,13 @@ pub(super) fn raytracing_setup(
                 stride: sbt_entry_layout.pad_to_align().size() as u64,
                 size: sbt_entry_layout.pad_to_align().size() as u64,
             },
-            miss_shader_binding_tables: vk::StridedDeviceAddressRegionKHR::default(),
-            hit_shader_binding_tables: vk::StridedDeviceAddressRegionKHR {
+            miss_shader_binding_tables: vk::StridedDeviceAddressRegionKHR {
                 device_address: device_address + sbt_group_layout.pad_to_align().size() as u64,
+                stride: sbt_entry_layout.pad_to_align().size() as u64,
+                size: sbt_entry_layout.pad_to_align().size() as u64,
+            },
+            hit_shader_binding_tables: vk::StridedDeviceAddressRegionKHR {
+                device_address: device_address + sbt_group_layout.pad_to_align().size() as u64 * 2,
                 stride: sbt_entry_layout.pad_to_align().size() as u64,
                 size: sbt_entry_layout.pad_to_align().size() as u64,
             },
