@@ -5,6 +5,8 @@
 #include "shared.glsl"
 
 layout(location = 0) rayPayloadEXT RayPayload payload;
+layout(set = 0, binding = 0) uniform writeonly image2D imgOutput;
 
 void main() {
+    imageStore(imgOutput, ivec2(gl_LaunchIDEXT.xy), vec4(1.0, 0.5, 0.5, 1.0));
 }

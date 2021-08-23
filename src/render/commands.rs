@@ -50,6 +50,16 @@ pub(super) fn record_command_buffers_system(
                 vk::PipelineBindPoint::RAY_TRACING_KHR,
                 raytracing_pipeline_state.pipeline,
             );
+            device.cmd_bind_descriptor_sets(
+                command_buffer,
+                vk::PipelineBindPoint::RAY_TRACING_KHR,
+                raytracing_pipeline_state.pipeline_layout,
+                0,
+                &[
+                    swapchain_image.image_desc_set
+                ],
+                &[]
+            );
             raytracing_pipeline_loader.cmd_trace_rays(
                 command_buffer,
                 &raytracing_pipeline_state.raygen_shader_binding_tables,

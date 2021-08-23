@@ -1,5 +1,6 @@
 use ash::vk;
 use core::mem::MaybeUninit;
+use std::result;
 
 const NUM_FRAMES_IN_FLIGHT: usize = 3;
 const SWAPCHAIN_LEN: u32 = 3;
@@ -16,11 +17,13 @@ pub(super) struct SwapchainImage {
     // is that cmd_begin_render_pass contains a reference to the framebuffer
     // which is unique to each swapchain image.
     pub(super) command_buffer: vk::CommandBuffer,
+    pub(super) image_desc_set: vk::DescriptorSet,
 }
 pub struct RenderState {
     pub(super) current_frame: usize,
     pub(super) frames_in_flight: [Frame; NUM_FRAMES_IN_FLIGHT],
     pub(super) swapchain_images: [SwapchainImage; SWAPCHAIN_LEN as usize],
+    pub(super) swapchain_images_desc_set_layout: vk::DescriptorSetLayout,
     pub(super) format: vk::Format,
     pub(super) extent: vk::Extent2D,
     pub(super) swapchain: vk::SwapchainKHR,
@@ -77,21 +80,65 @@ impl RenderState {
             frames_in_flight[i].write(frame);
         }
 
+        let target_img_desc_layout = device.create_descriptor_set_layout(
+            &vk::DescriptorSetLayoutCreateInfo::builder()
+            .bindings(&[
+                vk::DescriptorSetLayoutBinding::builder()
+                .binding(0)
+                .descriptor_type(vk::DescriptorType::STORAGE_IMAGE)
+                .descriptor_count(1)
+                .stage_flags(vk::ShaderStageFlags::RAYGEN_KHR)
+                .build()
+            ])
+            .build(),
+            None
+        ).unwrap();
+        let target_img_desc_pool = device.create_descriptor_pool(
+            &vk::DescriptorPoolCreateInfo::builder()
+            .flags(vk::DescriptorPoolCreateFlags::empty())
+            .max_sets(SWAPCHAIN_LEN as u32)
+            .pool_sizes(&[
+                vk::DescriptorPoolSize::builder()
+                .ty(vk::DescriptorType::STORAGE_IMAGE)
+                .descriptor_count(3)
+                .build()
+            ])
+            .build(),
+            None
+        ).unwrap();
+        
+        let mut target_img_descs = [vk::DescriptorSet::default(); SWAPCHAIN_LEN as usize];
+        let set_layouts = [target_img_desc_layout; SWAPCHAIN_LEN as usize];
+        let result = device
+        .fp_v1_0()
+        .allocate_descriptor_sets(
+            device.handle(),
+            &vk::DescriptorSetAllocateInfo::builder()
+            .descriptor_pool(target_img_desc_pool)
+            .set_layouts(&set_layouts)
+            .build(),
+            target_img_descs.as_mut_ptr()
+        );
+        assert_eq!(result, vk::Result::SUCCESS);
+
         let mut swapchain_images: [MaybeUninit<SwapchainImage>; SWAPCHAIN_LEN as usize] =
             MaybeUninit::uninit_array();
-        for (image, &command_buffer) in swapchain_images.iter_mut().zip(command_buffers.iter()) {
+        for (i, image) in swapchain_images.iter_mut().enumerate() {
             image.write(SwapchainImage {
                 view: vk::ImageView::null(),
                 image: vk::Image::null(),
                 fence: vk::Fence::null(),
-                command_buffer,
+                command_buffer: command_buffers[i],
+                image_desc_set: target_img_descs[i],
             });
         }
+
 
         RenderState {
             current_frame: 0,
             frames_in_flight: std::mem::transmute(frames_in_flight),
             swapchain_images: std::mem::transmute(swapchain_images),
+            swapchain_images_desc_set_layout: target_img_desc_layout,
             format: vk::Format::default(),
             extent: vk::Extent2D::default(),
             swapchain: vk::SwapchainKHR::null(),
@@ -197,6 +244,20 @@ impl RenderState {
                     None,
                 )
                 .unwrap();
+                device.update_descriptor_sets(&[
+                    vk::WriteDescriptorSet::builder()
+                    .dst_set(swapchain_image.image_desc_set)
+                    .dst_binding(0)
+                    .descriptor_type(vk::DescriptorType::STORAGE_IMAGE)
+                    .image_info(&[
+                        vk::DescriptorImageInfo {
+                            sampler: vk::Sampler::null(),
+                            image_view: swapchain_image.view,
+                            image_layout: vk::ImageLayout::GENERAL // TODO: ???
+                        }
+                    ])
+                    .build()
+                ], &[]);
         }
     }
 }

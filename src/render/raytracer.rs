@@ -8,6 +8,7 @@ use crate::{device_info::DeviceInfo, render::commands};
 
 pub(crate) struct RaytracingPipelineState {
     pub pipeline: vk::Pipeline,
+    pub pipeline_layout: vk::PipelineLayout,
     sbt_mem: gpu_alloc::MemoryBlock<vk::DeviceMemory>,
     sbt_buf: vk::Buffer,
     pub raygen_shader_binding_tables: vk::StridedDeviceAddressRegionKHR,
@@ -18,6 +19,7 @@ pub(crate) struct RaytracingPipelineState {
 
 pub(super) fn raytracing_setup(
     mut commands: Commands,
+    render_state: Res<super::state::RenderState>,
     device: Res<ash::Device>,
     raytracing_loader: Res<ash::extensions::khr::RayTracingPipeline>,
     device_info: Res<DeviceInfo>,
@@ -27,7 +29,7 @@ pub(super) fn raytracing_setup(
         let pipeline_layout = device.create_pipeline_layout(
             &vk::PipelineLayoutCreateInfo::builder()
             .set_layouts(&[
-
+                render_state.swapchain_images_desc_set_layout,
             ])
             .build(), None)
             .unwrap();
@@ -194,6 +196,7 @@ pub(super) fn raytracing_setup(
 
         let state = RaytracingPipelineState {
             pipeline: raytracing_pipeline,
+            pipeline_layout,
             sbt_buf,
             sbt_mem,
             raygen_shader_binding_tables: vk::StridedDeviceAddressRegionKHR {
