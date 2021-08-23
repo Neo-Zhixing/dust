@@ -8,6 +8,7 @@ pub(super) fn record_command_buffers_system(
     device: Res<ash::Device>,
     render_state: Res<RenderState>,
     raytracing_pipeline_loader: Res<ash::extensions::khr::RayTracingPipeline>,
+    raytracing_pipeline_state: Res<crate::render::raytracer::RaytracingPipelineState>,
 ) {
     if swapchain_rebuilt_events.iter().next().is_none() {
         return;
@@ -44,18 +45,21 @@ pub(super) fn record_command_buffers_system(
                     extent: render_state.extent,
                 }],
             );
-            /*
+            device.cmd_bind_pipeline(
+                command_buffer,
+                vk::PipelineBindPoint::RAY_TRACING_KHR,
+                raytracing_pipeline_state.pipeline,
+            );
             raytracing_pipeline_loader.cmd_trace_rays(
                 command_buffer,
-                raygen_shader_binding_tables,
-                miss_shader_binding_tables,
-                hit_shader_binding_tables,
-                callable_shader_binding_tables,
+                &raytracing_pipeline_state.raygen_shader_binding_tables,
+                &raytracing_pipeline_state.miss_shader_binding_tables,
+                &raytracing_pipeline_state.hit_shader_binding_tables,
+                &raytracing_pipeline_state.callable_shader_binding_tables,
                 render_state.extent.width,
                 render_state.extent.height,
                 1
             );
-            */
             device.cmd_pipeline_barrier(
                 command_buffer,
                 vk::PipelineStageFlags::COMPUTE_SHADER,
