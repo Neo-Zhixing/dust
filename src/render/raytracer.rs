@@ -4,7 +4,7 @@ use gpu_alloc::Request;
 use gpu_alloc_ash::AshMemoryDevice;
 use std::{ffi::CStr, io::Cursor};
 
-use crate::{device_info::DeviceInfo, render::commands};
+use crate::{device_info::DeviceInfo, render::commands, tlas::TlasState};
 
 pub(crate) struct RaytracingPipelineState {
     pub pipeline: vk::Pipeline,
@@ -20,6 +20,7 @@ pub(crate) struct RaytracingPipelineState {
 pub(super) fn raytracing_setup(
     mut commands: Commands,
     render_state: Res<super::state::RenderState>,
+    tlas_state: Res<TlasState>,
     device: Res<ash::Device>,
     raytracing_loader: Res<ash::extensions::khr::RayTracingPipeline>,
     device_info: Res<DeviceInfo>,
@@ -30,6 +31,7 @@ pub(super) fn raytracing_setup(
             &vk::PipelineLayoutCreateInfo::builder()
             .set_layouts(&[
                 render_state.swapchain_images_desc_set_layout,
+                tlas_state.desc_set_layout,
             ])
             .build(), None)
             .unwrap();

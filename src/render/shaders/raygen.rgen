@@ -6,7 +6,26 @@
 
 layout(location = 0) rayPayloadEXT RayPayload payload;
 layout(set = 0, binding = 0) uniform writeonly image2D imgOutput;
+layout(set = 1, binding = 0) uniform accelerationStructureEXT accelerationStructure;
+
 
 void main() {
-    imageStore(imgOutput, ivec2(gl_LaunchIDEXT.xy), vec4(1.0, 0.5, 0.5, 1.0));
+    const vec2 pixelUV = (vec2(gl_LaunchIDEXT.xy) + vec2(0.5)) / vec2(gl_LaunchSizeEXT.xy);
+    const vec2 cameraSpace = pixelUV * 2.0 - 1.0;
+
+
+    traceRayEXT(accelerationStructure, // acceleration structure
+        gl_RayFlagsNoneEXT,       // rayFlags
+        0xFF,           // cullMask
+        0,              // sbtRecordOffset
+        0,              // sbtRecordStride
+        0,              // missIndex
+        vec3(cameraSpace, 0.0),     // ray origin
+        0.0,           // ray min range
+        vec3(0,0,1),  // ray direction
+        1000.0,           // ray max range
+        0               // payload (location = 0)
+  );
+
+  imageStore(imgOutput, ivec2(gl_LaunchIDEXT.xy), vec4(payload.color, 1.0));
 }

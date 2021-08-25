@@ -6,5 +6,5 @@
 layout(location = 0) rayPayloadInEXT RayPayload payload;
 
 void main() {
-    payload.hitSky = 0;
+    payload.color = vec3(1.0, 0.0, 0.0);
 }

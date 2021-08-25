@@ -1,5 +1,7 @@
 use ash::vk;
 
+use crate::tlas::TlasState;
+
 use super::{RenderState, SwapchainRebuilt};
 use bevy::prelude::*;
 
@@ -9,6 +11,7 @@ pub(super) fn record_command_buffers_system(
     render_state: Res<RenderState>,
     raytracing_pipeline_loader: Res<ash::extensions::khr::RayTracingPipeline>,
     raytracing_pipeline_state: Res<crate::render::raytracer::RaytracingPipelineState>,
+    tlas_state: Res<TlasState>,
 ) {
     if swapchain_rebuilt_events.iter().next().is_none() {
         return;
@@ -56,9 +59,32 @@ pub(super) fn record_command_buffers_system(
                 raytracing_pipeline_state.pipeline_layout,
                 0,
                 &[
-                    swapchain_image.image_desc_set
+                    swapchain_image.image_desc_set,
+                    tlas_state.desc_set
                 ],
                 &[]
+            );
+            device.cmd_pipeline_barrier(
+                command_buffer,
+                vk::PipelineStageFlags::TOP_OF_PIPE,
+                vk::PipelineStageFlags::RAY_TRACING_SHADER_KHR,
+                vk::DependencyFlags::BY_REGION,
+                &[],
+                &[],
+                &[vk::ImageMemoryBarrier::builder()
+                    .image(swapchain_image.image)
+                    .src_access_mask(vk::AccessFlags::empty())
+                    .dst_access_mask(vk::AccessFlags::SHADER_WRITE)
+                    .subresource_range(vk::ImageSubresourceRange {
+                        aspect_mask: vk::ImageAspectFlags::COLOR,
+                        base_mip_level: 0,
+                        level_count: 1,
+                        base_array_layer: 0,
+                        layer_count: 1,
+                    })
+                    .old_layout(vk::ImageLayout::UNDEFINED)
+                    .new_layout(vk::ImageLayout::GENERAL)
+                    .build()],
             );
             raytracing_pipeline_loader.cmd_trace_rays(
                 command_buffer,
@@ -72,7 +98,7 @@ pub(super) fn record_command_buffers_system(
             );
             device.cmd_pipeline_barrier(
                 command_buffer,
-                vk::PipelineStageFlags::COMPUTE_SHADER,
+                vk::PipelineStageFlags::RAY_TRACING_SHADER_KHR,
                 vk::PipelineStageFlags::BOTTOM_OF_PIPE,
                 vk::DependencyFlags::BY_REGION,
                 &[],
@@ -88,7 +114,7 @@ pub(super) fn record_command_buffers_system(
                         base_array_layer: 0,
                         layer_count: 1,
                     })
-                    .old_layout(vk::ImageLayout::UNDEFINED)
+                    .old_layout(vk::ImageLayout::GENERAL)
                     .new_layout(vk::ImageLayout::PRESENT_SRC_KHR)
                     .build()],
             );

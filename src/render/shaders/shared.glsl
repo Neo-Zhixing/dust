@@ -1,3 +1,3 @@
 struct RayPayload {
-    float hitSky;
+    vec3 color;
 };

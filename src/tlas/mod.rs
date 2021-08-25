@@ -23,7 +23,7 @@ impl Plugin for TlasPlugin {
     }
 }
 
-struct TlasState {
+pub struct TlasState {
     unit_box_as: vk::AccelerationStructureKHR,
     unit_box_as_buf: vk::Buffer,
     unit_box_as_mem: crate::MemoryBlock,
@@ -32,6 +32,9 @@ struct TlasState {
     command_buffer: vk::CommandBuffer,
     needs_update_next_frame: bool,
     fence: vk::Fence,
+    pub desc_set_layout: vk::DescriptorSetLayout,
+    desc_pool: vk::DescriptorPool,
+    pub desc_set: vk::DescriptorSet,
 }
 
 fn tlas_setup(
@@ -285,6 +288,49 @@ fn tlas_setup(
         allocator.dealloc(AshMemoryDevice::wrap(&device), scratch_mem);
         device.destroy_buffer(unit_box_buffer, None);
         allocator.dealloc(AshMemoryDevice::wrap(&device), unit_box_mem);
+
+
+
+
+        let desc_set_layout = device.create_descriptor_set_layout(
+            &vk::DescriptorSetLayoutCreateInfo::builder()
+                .flags(vk::DescriptorSetLayoutCreateFlags::empty())
+                .bindings(&[
+                    vk::DescriptorSetLayoutBinding::builder()
+                    .binding(0)
+                    .descriptor_type(vk::DescriptorType::ACCELERATION_STRUCTURE_KHR)
+                    .descriptor_count(1)
+                    .stage_flags(vk::ShaderStageFlags::RAYGEN_KHR)
+                    .build()
+                ])
+                .build(),
+                None,
+            ).unwrap();
+        let desc_pool = device.create_descriptor_pool(
+            &vk::DescriptorPoolCreateInfo::builder()
+            .flags(vk::DescriptorPoolCreateFlags::empty())
+            .max_sets(1)
+            .pool_sizes(&[
+                vk::DescriptorPoolSize {
+                    ty: vk::DescriptorType::ACCELERATION_STRUCTURE_KHR,
+                    descriptor_count: 1
+                }
+            ])
+            .build(),
+            None,
+        ).unwrap();
+        let mut desc_set = vk::DescriptorSet::null();
+        let result = device
+            .fp_v1_0()
+            .allocate_descriptor_sets(
+                device.handle(),
+                &vk::DescriptorSetAllocateInfo::builder()
+                .descriptor_pool(desc_pool)
+                .set_layouts(&[desc_set_layout])
+                .build(),
+                &mut desc_set
+            );
+        assert_eq!(result, vk::Result::SUCCESS);
         let tlas_state = TlasState {
             unit_box_as,
             unit_box_as_buf,
@@ -294,6 +340,9 @@ fn tlas_setup(
             command_buffer,
             fence,
             needs_update_next_frame: false,
+            desc_set_layout,
+            desc_pool,
+            desc_set,
         };
         commands.insert_resource(tlas_state);
     }
@@ -576,5 +625,22 @@ fn tlas_update(
 
         println!("We did it");
         state.command_buffer = command_buffer;
+
+
+        let write_desc_set_as = vk::WriteDescriptorSetAccelerationStructureKHR::builder()
+            .acceleration_structures(&[tlas])
+            .build();
+        let mut write_desc_set = vk::WriteDescriptorSet::builder()
+        .dst_set(state.desc_set)
+        .dst_binding(0)
+        .descriptor_type(vk::DescriptorType::ACCELERATION_STRUCTURE_KHR)
+        .build();
+        write_desc_set.p_next = &write_desc_set_as as *const _ as *const c_void;
+        write_desc_set.descriptor_count = 1;
+        device.update_descriptor_sets(&[
+            write_desc_set
+        ],
+        &[]
+        );
     }
 }
