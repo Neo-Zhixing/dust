@@ -402,7 +402,7 @@ fn tlas_update(
                     transform: vk::TransformMatrixKHR {
                         matrix: [0.0; 12],
                     },
-                    instance_custom_index_and_mask: 0,
+                    instance_custom_index_and_mask: u32::MAX,
                     instance_shader_binding_table_record_offset_and_flags: 0,
                     acceleration_structure_reference: vk::AccelerationStructureReferenceKHR {
                         device_handle: state.unit_box_as_device_address,
