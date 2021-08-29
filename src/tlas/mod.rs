@@ -16,10 +16,11 @@ pub struct TlasPlugin;
 impl Plugin for TlasPlugin {
     fn build(&self, app: &mut App) {
         app.add_startup_system_to_stage(StartupStage::Startup, tlas_setup)
-            .add_system_to_stage(
-                CoreStage::PostUpdate,
-                tlas_update.after(bevy::transform::TransformSystem::TransformPropagate),
-            );
+           .add_startup_system_to_stage(StartupStage::PostStartup, tlas_update);
+            //.add_system_to_stage(
+            //    CoreStage::PostUpdate,
+            //    tlas_update.after(bevy::transform::TransformSystem::TransformPropagate),
+            //);
     }
 }
 
@@ -226,6 +227,7 @@ fn tlas_setup(
         let scratch_device_address = ((scratch_device_address + scratch_alignment - 1)
             / scratch_alignment)
             * scratch_alignment;
+        println!("Creating unit box");
         let unit_box_as = acceleration_structure_loader
             .create_acceleration_structure(
                 &vk::AccelerationStructureCreateInfoKHR::builder()
@@ -349,7 +351,6 @@ fn tlas_setup(
 }
 
 fn tlas_update(
-    mut commands: Commands,
     mut state: ResMut<TlasState>,
     device: Res<ash::Device>,
     queues: Res<Queues>,
@@ -394,11 +395,12 @@ fn tlas_update(
     let data: Vec<_> = entities_query
         .iter()
         .map(|(transform, aabb)| {
+            println!("data is {:?}", aabb);
             let mat = transform.compute_matrix().transpose().to_cols_array();
             unsafe {
                 let mut instance = vk::AccelerationStructureInstanceKHR {
                     transform: vk::TransformMatrixKHR {
-                        matrix: MaybeUninit::uninit().assume_init(),
+                        matrix: [0.0; 12],
                     },
                     instance_custom_index_and_mask: 0,
                     instance_shader_binding_table_record_offset_and_flags: 0,
@@ -406,9 +408,9 @@ fn tlas_update(
                         host_handle: state.unit_box_as,
                     },
                 };
-                for i in 0..12 {
-                    instance.transform.matrix[i] = mat[i];
-                }
+                instance.transform.matrix[0] = 1.0;
+                instance.transform.matrix[5] = 1.0;
+                instance.transform.matrix[10] = 1.0;
                 instance
             }
         })
@@ -528,7 +530,7 @@ fn tlas_update(
             .create_buffer(
                 &vk::BufferCreateInfo::builder()
                     .flags(vk::BufferCreateFlags::default())
-                    .size(sizes.build_scratch_size + scratch_alignment)
+                    .size(sizes.acceleration_structure_size)
                     .usage(
                         vk::BufferUsageFlags::ACCELERATION_STRUCTURE_STORAGE_KHR
                             | vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS,
@@ -538,7 +540,7 @@ fn tlas_update(
                 None,
             )
             .unwrap();
-        let as_buf_requirements = device.get_buffer_memory_requirements(scratch_buf);
+        let as_buf_requirements = device.get_buffer_memory_requirements(as_buf);
 
         let as_mem = allocator
             .alloc(
@@ -554,6 +556,7 @@ fn tlas_update(
         device
             .bind_buffer_memory(as_buf, *as_mem.memory(), as_mem.offset())
             .unwrap();
+        println!("creating tlas");
         let tlas = acceleration_structure_loader
             .create_acceleration_structure(
                 &vk::AccelerationStructureCreateInfoKHR::builder()
@@ -637,6 +640,7 @@ fn tlas_update(
         .build();
         write_desc_set.p_next = &write_desc_set_as as *const _ as *const c_void;
         write_desc_set.descriptor_count = 1;
+        println!("Update desc sets");
         device.update_descriptor_sets(&[
             write_desc_set
         ],

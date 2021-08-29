@@ -16,6 +16,7 @@ pub(super) fn record_command_buffers_system(
     if swapchain_rebuilt_events.iter().next().is_none() {
         return;
     }
+    println!("record command buffers");
     unsafe {
         for swapchain_image in render_state.swapchain_images.iter() {
             let command_buffer = swapchain_image.command_buffer;
@@ -53,17 +54,23 @@ pub(super) fn record_command_buffers_system(
                 vk::PipelineBindPoint::RAY_TRACING_KHR,
                 raytracing_pipeline_state.pipeline,
             );
+            let desc_sets = [
+                swapchain_image.image_desc_set,
+                tlas_state.desc_set
+            ];
             device.cmd_bind_descriptor_sets(
                 command_buffer,
                 vk::PipelineBindPoint::RAY_TRACING_KHR,
                 raytracing_pipeline_state.pipeline_layout,
                 0,
-                &[
-                    swapchain_image.image_desc_set,
-                    tlas_state.desc_set
-                ],
+                if tlas_state.desc_set == vk::DescriptorSet::null() {
+                    &desc_sets[0..1]
+                } else {
+                    &desc_sets[0..2]
+                },
                 &[]
             );
+            println!("bind desc sets");
             device.cmd_pipeline_barrier(
                 command_buffer,
                 vk::PipelineStageFlags::TOP_OF_PIPE,

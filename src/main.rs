@@ -22,4 +22,13 @@ fn setup(mut commands: Commands) {
         })
         .insert(GlobalTransform::default())
         .insert(Transform::default());
+    
+    commands
+        .spawn()
+        .insert(Raytraced {
+            aabb_extent: bevy::math::Vec3::new(1.0, 1.0, 1.0),
+        })
+        .insert(GlobalTransform::default())
+        .insert(Transform::from_xyz(1.0, 2.0, 3.0));
+
 }

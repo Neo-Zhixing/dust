@@ -20,7 +20,7 @@ void main() {
         0,              // sbtRecordOffset
         0,              // sbtRecordStride
         0,              // missIndex
-        vec3(cameraSpace, 0.0),     // ray origin
+        vec3(cameraSpace*10, -100.0),     // ray origin
         0.0,           // ray min range
         vec3(0,0,1),  // ray direction
         1000.0,           // ray max range

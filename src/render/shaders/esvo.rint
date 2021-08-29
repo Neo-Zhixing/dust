@@ -3,9 +3,10 @@
 
 #include "shared.glsl"
 
-
 void main()
 {	
 	vec3 aabb_min = gl_ObjectToWorldEXT * vec4(0, 0, 0, 1);
 	vec3 aabb_max = gl_ObjectToWorldEXT * vec4(1, 1, 1, 1);
+
+    reportIntersectionEXT(10.0, 0);
 }

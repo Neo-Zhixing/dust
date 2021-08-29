@@ -205,6 +205,7 @@ fn setup(
                     .enabled_features(&vk::PhysicalDeviceFeatures {
                         sparse_binding: 1,
                         sparse_residency_buffer: 1,
+                        shader_storage_image_write_without_format: 1,
                         ..Default::default()
                     })
                     .push_next(
