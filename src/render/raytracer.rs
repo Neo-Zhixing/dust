@@ -64,6 +64,16 @@ pub(super) fn raytracing_setup(
                 .unwrap(),)
                 .build(), None)
                 .expect("Cannot build miss shader");
+
+        let closest_hit_shader_module = device.create_shader_module(
+            &vk::ShaderModuleCreateInfo::builder()
+                .flags(vk::ShaderModuleCreateFlags::empty())
+                .code(&ash::util::read_spv(&mut Cursor::new(
+                    &include_bytes!(concat!(env!("OUT_DIR"), "/shaders/closest_hit.rchit.spv"))[..],
+                ))
+                .unwrap(),)
+                .build(), None)
+                .expect("Cannot build closest hit shader");
         /*let deferred_operation = deferred_operation_loader
         .create_deferred_operation(None)
         .unwrap(); */
@@ -102,6 +112,14 @@ pub(super) fn raytracing_setup(
                         .name(CStr::from_bytes_with_nul_unchecked(b"main\0"))
                         .specialization_info(&vk::SpecializationInfo::builder()
                             .build())
+                        .build(),
+                        vk::PipelineShaderStageCreateInfo::builder()
+                        .flags(vk::PipelineShaderStageCreateFlags::default())
+                        .stage(vk::ShaderStageFlags::CLOSEST_HIT_KHR)
+                        .module(closest_hit_shader_module)
+                        .name(CStr::from_bytes_with_nul_unchecked(b"main\0"))
+                        .specialization_info(&vk::SpecializationInfo::builder()
+                            .build())
                         .build()
                     ])
                     .groups(&[
@@ -121,9 +139,10 @@ pub(super) fn raytracing_setup(
                             .build(),
                         vk::RayTracingShaderGroupCreateInfoKHR::builder()
                             .ty(vk::RayTracingShaderGroupTypeKHR::PROCEDURAL_HIT_GROUP)
+                            .general_shader(vk::SHADER_UNUSED_KHR)
                             .intersection_shader(2)
                             .any_hit_shader(vk::SHADER_UNUSED_KHR)
-                            .closest_hit_shader(vk::SHADER_UNUSED_KHR)
+                            .closest_hit_shader(3)
                             .build(),
                     ])
                     .max_pipeline_ray_recursion_depth(device_info.raytracing_pipeline_properties.max_ray_recursion_depth.max(1))

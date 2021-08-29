@@ -1,4 +1,4 @@
-use std::{ffi::c_void, mem::MaybeUninit};
+use std::{ffi::c_void, intrinsics::copy, mem::MaybeUninit};
 
 use ash::vk;
 use bevy::prelude::*;
@@ -405,12 +405,10 @@ fn tlas_update(
                     instance_custom_index_and_mask: 0,
                     instance_shader_binding_table_record_offset_and_flags: 0,
                     acceleration_structure_reference: vk::AccelerationStructureReferenceKHR {
-                        host_handle: state.unit_box_as,
+                        device_handle: state.unit_box_as_device_address,
                     },
                 };
-                instance.transform.matrix[0] = 1.0;
-                instance.transform.matrix[5] = 1.0;
-                instance.transform.matrix[10] = 1.0;
+                instance.transform.matrix.copy_from_slice(&mat[0..12]);
                 instance
             }
         })
@@ -602,7 +600,7 @@ fn tlas_update(
             command_buffer,
             &[build_geometry_info],
             &[&[vk::AccelerationStructureBuildRangeInfoKHR {
-                primitive_count: 1,
+                primitive_count: data.len() as u32,
                 primitive_offset: 0,
                 first_vertex: 0,
                 transform_offset: 0,

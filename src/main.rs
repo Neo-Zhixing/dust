@@ -22,7 +22,7 @@ fn setup(mut commands: Commands) {
         })
         .insert(GlobalTransform::default())
         .insert(Transform::default());
-    
+    /*
     commands
         .spawn()
         .insert(Raytraced {
@@ -30,5 +30,6 @@ fn setup(mut commands: Commands) {
         })
         .insert(GlobalTransform::default())
         .insert(Transform::from_xyz(1.0, 2.0, 3.0));
+        */
 
 }
