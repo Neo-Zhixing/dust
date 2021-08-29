@@ -9,6 +9,9 @@ fn main() {
         .add_plugin(bevy::input::InputPlugin::default())
         .add_plugin(bevy::window::WindowPlugin::default())
         .add_plugin(bevy::winit::WinitPlugin::default())
+        //.add_plugin(bevy::asset::AssetPlugin::default())
+        //.add_plugin(bevy::render2::RenderPlugin::default())
+        //.add_plugin(bevy::core_pipeline::CorePipelinePlugin::default())
         .add_plugin(dust_new::DustPlugin::default())
         .add_startup_system(setup)
         .run();

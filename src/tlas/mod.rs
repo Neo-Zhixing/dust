@@ -128,22 +128,23 @@ fn tlas_setup(
                 .buffer(unit_box_buffer)
                 .build(),
         );
+        let geometry = [vk::AccelerationStructureGeometryKHR::builder()
+        .geometry_type(vk::GeometryTypeKHR::AABBS)
+        .flags(vk::GeometryFlagsKHR::default())
+        .geometry(vk::AccelerationStructureGeometryDataKHR {
+            aabbs: vk::AccelerationStructureGeometryAabbsDataKHR::builder()
+                .data(vk::DeviceOrHostAddressConstKHR {
+                    device_address: unit_box_device_address,
+                })
+                .stride(std::mem::size_of_val(&unit_box) as u64)
+                .build(),
+        })
+        .build()];
         let mut build_geometry_info = vk::AccelerationStructureBuildGeometryInfoKHR::builder()
             .ty(vk::AccelerationStructureTypeKHR::BOTTOM_LEVEL)
             .flags(vk::BuildAccelerationStructureFlagsKHR::PREFER_FAST_TRACE)
             .mode(vk::BuildAccelerationStructureModeKHR::BUILD)
-            .geometries(&[vk::AccelerationStructureGeometryKHR::builder()
-                .geometry_type(vk::GeometryTypeKHR::AABBS)
-                .flags(vk::GeometryFlagsKHR::default())
-                .geometry(vk::AccelerationStructureGeometryDataKHR {
-                    aabbs: vk::AccelerationStructureGeometryAabbsDataKHR::builder()
-                        .data(vk::DeviceOrHostAddressConstKHR {
-                            device_address: unit_box_device_address,
-                        })
-                        .stride(std::mem::size_of_val(&unit_box) as u64)
-                        .build(),
-                })
-                .build()])
+            .geometries(&geometry)
             .build();
         let sizes = acceleration_structure_loader.get_acceleration_structure_build_sizes(
             vk::AccelerationStructureBuildTypeKHR::DEVICE,
@@ -457,22 +458,24 @@ fn tlas_update(
         )
     };
 
+    let build_geometry = [vk::AccelerationStructureGeometryKHR::builder()
+    .geometry_type(vk::GeometryTypeKHR::INSTANCES)
+    .flags(vk::GeometryFlagsKHR::default())
+    .geometry(vk::AccelerationStructureGeometryDataKHR {
+        instances: vk::AccelerationStructureGeometryInstancesDataKHR::builder()
+            .array_of_pointers(false)
+            .data(vk::DeviceOrHostAddressConstKHR {
+                device_address: data_device_addr,
+            })
+            .build(),
+    })
+    .build()];
+
     let mut build_geometry_info = vk::AccelerationStructureBuildGeometryInfoKHR::builder()
         .ty(vk::AccelerationStructureTypeKHR::TOP_LEVEL)
         .flags(vk::BuildAccelerationStructureFlagsKHR::PREFER_FAST_TRACE)
         .mode(vk::BuildAccelerationStructureModeKHR::BUILD)
-        .geometries(&[vk::AccelerationStructureGeometryKHR::builder()
-            .geometry_type(vk::GeometryTypeKHR::INSTANCES)
-            .flags(vk::GeometryFlagsKHR::default())
-            .geometry(vk::AccelerationStructureGeometryDataKHR {
-                instances: vk::AccelerationStructureGeometryInstancesDataKHR::builder()
-                    .array_of_pointers(false)
-                    .data(vk::DeviceOrHostAddressConstKHR {
-                        device_address: data_device_addr,
-                    })
-                    .build(),
-            })
-            .build()])
+        .geometries(&build_geometry)
         .build();
 
     unsafe {
@@ -628,8 +631,9 @@ fn tlas_update(
         state.command_buffer = command_buffer;
 
 
+        let tlass = [tlas];
         let write_desc_set_as = vk::WriteDescriptorSetAccelerationStructureKHR::builder()
-            .acceleration_structures(&[tlas])
+            .acceleration_structures(&tlass)
             .build();
         let mut write_desc_set = vk::WriteDescriptorSet::builder()
         .dst_set(state.desc_set)

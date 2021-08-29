@@ -2,15 +2,19 @@
 name = "dust-new"
 version = "0.1.0"
 edition = "2018"
+resolver = "2"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies.bevy]
-git = "https://github.com/bevyengine/bevy.git"
+git = "https://github.com/Neo-Zhixing/bevy.git"
+branch="update-to-wgpu-master"
 default-features = false
 features = [
     "bevy_winit",
-    "x11"
+    "x11",
+    "bevy_render2",
+    "bevy_core_pipeline"
 ]
 
 
