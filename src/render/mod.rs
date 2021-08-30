@@ -1,6 +1,6 @@
 mod commands;
-mod state;
 mod raytracer;
+mod state;
 
 use state::RenderState;
 
@@ -18,7 +18,11 @@ impl Plugin for RenderPlugin {
             .add_startup_system(setup)
             .add_startup_system_to_stage(StartupStage::PostStartup, raytracer::raytracing_setup)
             .add_system(rebuild.label("rebuild swapchain on resize"))
-            .add_system(commands::record_command_buffers_system.label("rebuild command buffers").after("rebuild swapchain on resize"))
+            .add_system(
+                commands::record_command_buffers_system
+                    .label("rebuild command buffers")
+                    .after("rebuild swapchain on resize"),
+            )
             .add_system(update.after("rebuild command buffers"));
     }
 }

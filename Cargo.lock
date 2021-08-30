@@ -145,7 +145,7 @@ checksum = "904dfeac50f3cdaba28fc6f57fdcddb75f49ed61346676a78c4ffe55877802fd"
 [[package]]
 name = "bevy"
 version = "0.5.0"
-source = "git+https://github.com/Neo-Zhixing/bevy.git?branch=update-to-wgpu-master#9f038a653ca26055c50ac14f84a919063dfcecd7"
+source = "git+https://github.com/Neo-Zhixing/bevy.git?branch=update-to-wgpu-master#1b5718bd93400f94c53d4da6139826379cae2c5a"
 dependencies = [
  "bevy_internal",
 ]
@@ -153,7 +153,7 @@ dependencies = [
 [[package]]
 name = "bevy_app"
 version = "0.5.0"
-source = "git+https://github.com/Neo-Zhixing/bevy.git?branch=update-to-wgpu-master#9f038a653ca26055c50ac14f84a919063dfcecd7"
+source = "git+https://github.com/Neo-Zhixing/bevy.git?branch=update-to-wgpu-master#1b5718bd93400f94c53d4da6139826379cae2c5a"
 dependencies = [
  "bevy_derive",
  "bevy_ecs",
@@ -166,7 +166,7 @@ dependencies = [
 [[package]]
 name = "bevy_asset"
 version = "0.5.0"
-source = "git+https://github.com/Neo-Zhixing/bevy.git?branch=update-to-wgpu-master#9f038a653ca26055c50ac14f84a919063dfcecd7"
+source = "git+https://github.com/Neo-Zhixing/bevy.git?branch=update-to-wgpu-master#1b5718bd93400f94c53d4da6139826379cae2c5a"
 dependencies = [
  "anyhow",
  "bevy_app",
@@ -193,7 +193,7 @@ dependencies = [
 [[package]]
 name = "bevy_core"
 version = "0.5.0"
-source = "git+https://github.com/Neo-Zhixing/bevy.git?branch=update-to-wgpu-master#9f038a653ca26055c50ac14f84a919063dfcecd7"
+source = "git+https://github.com/Neo-Zhixing/bevy.git?branch=update-to-wgpu-master#1b5718bd93400f94c53d4da6139826379cae2c5a"
 dependencies = [
  "bevy_app",
  "bevy_derive",
@@ -208,7 +208,7 @@ dependencies = [
 [[package]]
 name = "bevy_core_pipeline"
 version = "0.5.0"
-source = "git+https://github.com/Neo-Zhixing/bevy.git?branch=update-to-wgpu-master#9f038a653ca26055c50ac14f84a919063dfcecd7"
+source = "git+https://github.com/Neo-Zhixing/bevy.git?branch=update-to-wgpu-master#1b5718bd93400f94c53d4da6139826379cae2c5a"
 dependencies = [
  "bevy_app",
  "bevy_ecs",
@@ -218,7 +218,7 @@ dependencies = [
 [[package]]
 name = "bevy_derive"
 version = "0.5.0"
-source = "git+https://github.com/Neo-Zhixing/bevy.git?branch=update-to-wgpu-master#9f038a653ca26055c50ac14f84a919063dfcecd7"
+source = "git+https://github.com/Neo-Zhixing/bevy.git?branch=update-to-wgpu-master#1b5718bd93400f94c53d4da6139826379cae2c5a"
 dependencies = [
  "Inflector",
  "bevy_macro_utils",
@@ -229,7 +229,7 @@ dependencies = [
 [[package]]
 name = "bevy_diagnostic"
 version = "0.5.0"
-source = "git+https://github.com/Neo-Zhixing/bevy.git?branch=update-to-wgpu-master#9f038a653ca26055c50ac14f84a919063dfcecd7"
+source = "git+https://github.com/Neo-Zhixing/bevy.git?branch=update-to-wgpu-master#1b5718bd93400f94c53d4da6139826379cae2c5a"
 dependencies = [
  "bevy_app",
  "bevy_core",
@@ -241,7 +241,7 @@ dependencies = [
 [[package]]
 name = "bevy_ecs"
 version = "0.5.0"
-source = "git+https://github.com/Neo-Zhixing/bevy.git?branch=update-to-wgpu-master#9f038a653ca26055c50ac14f84a919063dfcecd7"
+source = "git+https://github.com/Neo-Zhixing/bevy.git?branch=update-to-wgpu-master#1b5718bd93400f94c53d4da6139826379cae2c5a"
 dependencies = [
  "async-channel",
  "bevy_ecs_macros",
@@ -259,7 +259,7 @@ dependencies = [
 [[package]]
 name = "bevy_ecs_macros"
 version = "0.5.0"
-source = "git+https://github.com/Neo-Zhixing/bevy.git?branch=update-to-wgpu-master#9f038a653ca26055c50ac14f84a919063dfcecd7"
+source = "git+https://github.com/Neo-Zhixing/bevy.git?branch=update-to-wgpu-master#1b5718bd93400f94c53d4da6139826379cae2c5a"
 dependencies = [
  "bevy_macro_utils",
  "proc-macro2",
@@ -270,7 +270,7 @@ dependencies = [
 [[package]]
 name = "bevy_input"
 version = "0.5.0"
-source = "git+https://github.com/Neo-Zhixing/bevy.git?branch=update-to-wgpu-master#9f038a653ca26055c50ac14f84a919063dfcecd7"
+source = "git+https://github.com/Neo-Zhixing/bevy.git?branch=update-to-wgpu-master#1b5718bd93400f94c53d4da6139826379cae2c5a"
 dependencies = [
  "bevy_app",
  "bevy_ecs",
@@ -281,7 +281,7 @@ dependencies = [
 [[package]]
 name = "bevy_internal"
 version = "0.5.0"
-source = "git+https://github.com/Neo-Zhixing/bevy.git?branch=update-to-wgpu-master#9f038a653ca26055c50ac14f84a919063dfcecd7"
+source = "git+https://github.com/Neo-Zhixing/bevy.git?branch=update-to-wgpu-master#1b5718bd93400f94c53d4da6139826379cae2c5a"
 dependencies = [
  "bevy_app",
  "bevy_asset",
@@ -307,7 +307,7 @@ dependencies = [
 [[package]]
 name = "bevy_log"
 version = "0.5.0"
-source = "git+https://github.com/Neo-Zhixing/bevy.git?branch=update-to-wgpu-master#9f038a653ca26055c50ac14f84a919063dfcecd7"
+source = "git+https://github.com/Neo-Zhixing/bevy.git?branch=update-to-wgpu-master#1b5718bd93400f94c53d4da6139826379cae2c5a"
 dependencies = [
  "android_log-sys 0.2.0",
  "bevy_app",
@@ -321,7 +321,7 @@ dependencies = [
 [[package]]
 name = "bevy_macro_utils"
 version = "0.5.0"
-source = "git+https://github.com/Neo-Zhixing/bevy.git?branch=update-to-wgpu-master#9f038a653ca26055c50ac14f84a919063dfcecd7"
+source = "git+https://github.com/Neo-Zhixing/bevy.git?branch=update-to-wgpu-master#1b5718bd93400f94c53d4da6139826379cae2c5a"
 dependencies = [
  "cargo-manifest",
  "quote",
@@ -331,7 +331,7 @@ dependencies = [
 [[package]]
 name = "bevy_math"
 version = "0.5.0"
-source = "git+https://github.com/Neo-Zhixing/bevy.git?branch=update-to-wgpu-master#9f038a653ca26055c50ac14f84a919063dfcecd7"
+source = "git+https://github.com/Neo-Zhixing/bevy.git?branch=update-to-wgpu-master#1b5718bd93400f94c53d4da6139826379cae2c5a"
 dependencies = [
  "bevy_reflect",
  "glam 0.15.2",
@@ -340,7 +340,7 @@ dependencies = [
 [[package]]
 name = "bevy_reflect"
 version = "0.5.0"
-source = "git+https://github.com/Neo-Zhixing/bevy.git?branch=update-to-wgpu-master#9f038a653ca26055c50ac14f84a919063dfcecd7"
+source = "git+https://github.com/Neo-Zhixing/bevy.git?branch=update-to-wgpu-master#1b5718bd93400f94c53d4da6139826379cae2c5a"
 dependencies = [
  "bevy_reflect_derive",
  "bevy_utils",
@@ -356,7 +356,7 @@ dependencies = [
 [[package]]
 name = "bevy_reflect_derive"
 version = "0.5.0"
-source = "git+https://github.com/Neo-Zhixing/bevy.git?branch=update-to-wgpu-master#9f038a653ca26055c50ac14f84a919063dfcecd7"
+source = "git+https://github.com/Neo-Zhixing/bevy.git?branch=update-to-wgpu-master#1b5718bd93400f94c53d4da6139826379cae2c5a"
 dependencies = [
  "bevy_macro_utils",
  "proc-macro2",
@@ -368,7 +368,7 @@ dependencies = [
 [[package]]
 name = "bevy_render2"
 version = "0.5.0"
-source = "git+https://github.com/Neo-Zhixing/bevy.git?branch=update-to-wgpu-master#9f038a653ca26055c50ac14f84a919063dfcecd7"
+source = "git+https://github.com/Neo-Zhixing/bevy.git?branch=update-to-wgpu-master#1b5718bd93400f94c53d4da6139826379cae2c5a"
 dependencies = [
  "anyhow",
  "bevy_app",
@@ -400,7 +400,7 @@ dependencies = [
 [[package]]
 name = "bevy_scene"
 version = "0.5.0"
-source = "git+https://github.com/Neo-Zhixing/bevy.git?branch=update-to-wgpu-master#9f038a653ca26055c50ac14f84a919063dfcecd7"
+source = "git+https://github.com/Neo-Zhixing/bevy.git?branch=update-to-wgpu-master#1b5718bd93400f94c53d4da6139826379cae2c5a"
 dependencies = [
  "anyhow",
  "bevy_app",
@@ -418,7 +418,7 @@ dependencies = [
 [[package]]
 name = "bevy_tasks"
 version = "0.5.0"
-source = "git+https://github.com/Neo-Zhixing/bevy.git?branch=update-to-wgpu-master#9f038a653ca26055c50ac14f84a919063dfcecd7"
+source = "git+https://github.com/Neo-Zhixing/bevy.git?branch=update-to-wgpu-master#1b5718bd93400f94c53d4da6139826379cae2c5a"
 dependencies = [
  "async-channel",
  "async-executor",
@@ -431,7 +431,7 @@ dependencies = [
 [[package]]
 name = "bevy_transform"
 version = "0.5.0"
-source = "git+https://github.com/Neo-Zhixing/bevy.git?branch=update-to-wgpu-master#9f038a653ca26055c50ac14f84a919063dfcecd7"
+source = "git+https://github.com/Neo-Zhixing/bevy.git?branch=update-to-wgpu-master#1b5718bd93400f94c53d4da6139826379cae2c5a"
 dependencies = [
  "bevy_app",
  "bevy_ecs",
@@ -444,7 +444,7 @@ dependencies = [
 [[package]]
 name = "bevy_utils"
 version = "0.5.0"
-source = "git+https://github.com/Neo-Zhixing/bevy.git?branch=update-to-wgpu-master#9f038a653ca26055c50ac14f84a919063dfcecd7"
+source = "git+https://github.com/Neo-Zhixing/bevy.git?branch=update-to-wgpu-master#1b5718bd93400f94c53d4da6139826379cae2c5a"
 dependencies = [
  "ahash 0.7.4",
  "bevy_derive",
@@ -457,7 +457,7 @@ dependencies = [
 [[package]]
 name = "bevy_window"
 version = "0.5.0"
-source = "git+https://github.com/Neo-Zhixing/bevy.git?branch=update-to-wgpu-master#9f038a653ca26055c50ac14f84a919063dfcecd7"
+source = "git+https://github.com/Neo-Zhixing/bevy.git?branch=update-to-wgpu-master#1b5718bd93400f94c53d4da6139826379cae2c5a"
 dependencies = [
  "bevy_app",
  "bevy_ecs",
@@ -470,7 +470,7 @@ dependencies = [
 [[package]]
 name = "bevy_winit"
 version = "0.5.0"
-source = "git+https://github.com/Neo-Zhixing/bevy.git?branch=update-to-wgpu-master#9f038a653ca26055c50ac14f84a919063dfcecd7"
+source = "git+https://github.com/Neo-Zhixing/bevy.git?branch=update-to-wgpu-master#1b5718bd93400f94c53d4da6139826379cae2c5a"
 dependencies = [
  "bevy_app",
  "bevy_ecs",
@@ -748,7 +748,7 @@ dependencies = [
 [[package]]
 name = "crevice"
 version = "0.6.0"
-source = "git+https://github.com/Neo-Zhixing/bevy.git?branch=update-to-wgpu-master#9f038a653ca26055c50ac14f84a919063dfcecd7"
+source = "git+https://github.com/Neo-Zhixing/bevy.git?branch=update-to-wgpu-master#1b5718bd93400f94c53d4da6139826379cae2c5a"
 dependencies = [
  "bytemuck",
  "crevice-derive",
@@ -759,7 +759,7 @@ dependencies = [
 [[package]]
 name = "crevice-derive"
 version = "0.6.0"
-source = "git+https://github.com/Neo-Zhixing/bevy.git?branch=update-to-wgpu-master#9f038a653ca26055c50ac14f84a919063dfcecd7"
+source = "git+https://github.com/Neo-Zhixing/bevy.git?branch=update-to-wgpu-master#1b5718bd93400f94c53d4da6139826379cae2c5a"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -913,6 +913,9 @@ dependencies = [
  "gpu-alloc",
  "gpu-alloc-ash",
  "shaderc",
+ "wgpu",
+ "wgpu-hal",
+ "wgpu-types",
 ]
 
 [[package]]

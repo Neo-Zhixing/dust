@@ -37,7 +37,8 @@ impl DeviceInfo {
         let mut raytracing_pipeline_properties =
             vk::PhysicalDeviceRayTracingPipelinePropertiesKHR::default();
         properties2.p_next = &mut acceleration_structure_properties as *mut _ as *mut c_void;
-        acceleration_structure_properties.p_next = &mut raytracing_pipeline_properties as *mut _ as *mut c_void;
+        acceleration_structure_properties.p_next =
+            &mut raytracing_pipeline_properties as *mut _ as *mut c_void;
         instance.get_physical_device_properties2(physical_device, &mut properties2);
 
         Self {

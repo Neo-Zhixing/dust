@@ -54,10 +54,7 @@ pub(super) fn record_command_buffers_system(
                 vk::PipelineBindPoint::RAY_TRACING_KHR,
                 raytracing_pipeline_state.pipeline,
             );
-            let desc_sets = [
-                swapchain_image.image_desc_set,
-                tlas_state.desc_set
-            ];
+            let desc_sets = [swapchain_image.image_desc_set, tlas_state.desc_set];
             device.cmd_bind_descriptor_sets(
                 command_buffer,
                 vk::PipelineBindPoint::RAY_TRACING_KHR,
@@ -68,7 +65,7 @@ pub(super) fn record_command_buffers_system(
                 } else {
                     &desc_sets[0..2]
                 },
-                &[]
+                &[],
             );
             println!("bind desc sets");
             device.cmd_pipeline_barrier(
@@ -101,7 +98,7 @@ pub(super) fn record_command_buffers_system(
                 &raytracing_pipeline_state.callable_shader_binding_tables,
                 render_state.extent.width,
                 render_state.extent.height,
-                1
+                1,
             );
             device.cmd_pipeline_barrier(
                 command_buffer,

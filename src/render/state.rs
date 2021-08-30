@@ -80,44 +80,42 @@ impl RenderState {
             frames_in_flight[i].write(frame);
         }
 
-        let target_img_desc_layout = device.create_descriptor_set_layout(
-            &vk::DescriptorSetLayoutCreateInfo::builder()
-            .bindings(&[
-                vk::DescriptorSetLayoutBinding::builder()
-                .binding(0)
-                .descriptor_type(vk::DescriptorType::STORAGE_IMAGE)
-                .descriptor_count(1)
-                .stage_flags(vk::ShaderStageFlags::RAYGEN_KHR)
-                .build()
-            ])
-            .build(),
-            None
-        ).unwrap();
-        let target_img_desc_pool = device.create_descriptor_pool(
-            &vk::DescriptorPoolCreateInfo::builder()
-            .flags(vk::DescriptorPoolCreateFlags::empty())
-            .max_sets(SWAPCHAIN_LEN as u32)
-            .pool_sizes(&[
-                vk::DescriptorPoolSize::builder()
-                .ty(vk::DescriptorType::STORAGE_IMAGE)
-                .descriptor_count(3)
-                .build()
-            ])
-            .build(),
-            None
-        ).unwrap();
-        
+        let target_img_desc_layout = device
+            .create_descriptor_set_layout(
+                &vk::DescriptorSetLayoutCreateInfo::builder()
+                    .bindings(&[vk::DescriptorSetLayoutBinding::builder()
+                        .binding(0)
+                        .descriptor_type(vk::DescriptorType::STORAGE_IMAGE)
+                        .descriptor_count(1)
+                        .stage_flags(vk::ShaderStageFlags::RAYGEN_KHR)
+                        .build()])
+                    .build(),
+                None,
+            )
+            .unwrap();
+        let target_img_desc_pool = device
+            .create_descriptor_pool(
+                &vk::DescriptorPoolCreateInfo::builder()
+                    .flags(vk::DescriptorPoolCreateFlags::empty())
+                    .max_sets(SWAPCHAIN_LEN as u32)
+                    .pool_sizes(&[vk::DescriptorPoolSize::builder()
+                        .ty(vk::DescriptorType::STORAGE_IMAGE)
+                        .descriptor_count(3)
+                        .build()])
+                    .build(),
+                None,
+            )
+            .unwrap();
+
         let mut target_img_descs = [vk::DescriptorSet::default(); SWAPCHAIN_LEN as usize];
         let set_layouts = [target_img_desc_layout; SWAPCHAIN_LEN as usize];
-        let result = device
-        .fp_v1_0()
-        .allocate_descriptor_sets(
+        let result = device.fp_v1_0().allocate_descriptor_sets(
             device.handle(),
             &vk::DescriptorSetAllocateInfo::builder()
-            .descriptor_pool(target_img_desc_pool)
-            .set_layouts(&set_layouts)
-            .build(),
-            target_img_descs.as_mut_ptr()
+                .descriptor_pool(target_img_desc_pool)
+                .set_layouts(&set_layouts)
+                .build(),
+            target_img_descs.as_mut_ptr(),
         );
         assert_eq!(result, vk::Result::SUCCESS);
 
@@ -132,7 +130,6 @@ impl RenderState {
                 image_desc_set: target_img_descs[i],
             });
         }
-
 
         RenderState {
             current_frame: 0,
@@ -244,20 +241,19 @@ impl RenderState {
                     None,
                 )
                 .unwrap();
-                device.update_descriptor_sets(&[
-                    vk::WriteDescriptorSet::builder()
+            device.update_descriptor_sets(
+                &[vk::WriteDescriptorSet::builder()
                     .dst_set(swapchain_image.image_desc_set)
                     .dst_binding(0)
                     .descriptor_type(vk::DescriptorType::STORAGE_IMAGE)
-                    .image_info(&[
-                        vk::DescriptorImageInfo {
-                            sampler: vk::Sampler::null(),
-                            image_view: swapchain_image.view,
-                            image_layout: vk::ImageLayout::GENERAL // TODO: ???
-                        }
-                    ])
-                    .build()
-                ], &[]);
+                    .image_info(&[vk::DescriptorImageInfo {
+                        sampler: vk::Sampler::null(),
+                        image_view: swapchain_image.view,
+                        image_layout: vk::ImageLayout::GENERAL, // TODO: ???
+                    }])
+                    .build()],
+                &[],
+            );
         }
     }
 }

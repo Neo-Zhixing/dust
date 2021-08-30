@@ -16,11 +16,11 @@ pub struct TlasPlugin;
 impl Plugin for TlasPlugin {
     fn build(&self, app: &mut App) {
         app.add_startup_system_to_stage(StartupStage::Startup, tlas_setup)
-           .add_startup_system_to_stage(StartupStage::PostStartup, tlas_update);
-            //.add_system_to_stage(
-            //    CoreStage::PostUpdate,
-            //    tlas_update.after(bevy::transform::TransformSystem::TransformPropagate),
-            //);
+            .add_startup_system_to_stage(StartupStage::PostStartup, tlas_update);
+        //.add_system_to_stage(
+        //    CoreStage::PostUpdate,
+        //    tlas_update.after(bevy::transform::TransformSystem::TransformPropagate),
+        //);
     }
 }
 
@@ -129,17 +129,17 @@ fn tlas_setup(
                 .build(),
         );
         let geometry = [vk::AccelerationStructureGeometryKHR::builder()
-        .geometry_type(vk::GeometryTypeKHR::AABBS)
-        .flags(vk::GeometryFlagsKHR::default())
-        .geometry(vk::AccelerationStructureGeometryDataKHR {
-            aabbs: vk::AccelerationStructureGeometryAabbsDataKHR::builder()
-                .data(vk::DeviceOrHostAddressConstKHR {
-                    device_address: unit_box_device_address,
-                })
-                .stride(std::mem::size_of_val(&unit_box) as u64)
-                .build(),
-        })
-        .build()];
+            .geometry_type(vk::GeometryTypeKHR::AABBS)
+            .flags(vk::GeometryFlagsKHR::default())
+            .geometry(vk::AccelerationStructureGeometryDataKHR {
+                aabbs: vk::AccelerationStructureGeometryAabbsDataKHR::builder()
+                    .data(vk::DeviceOrHostAddressConstKHR {
+                        device_address: unit_box_device_address,
+                    })
+                    .stride(std::mem::size_of_val(&unit_box) as u64)
+                    .build(),
+            })
+            .build()];
         let mut build_geometry_info = vk::AccelerationStructureBuildGeometryInfoKHR::builder()
             .ty(vk::AccelerationStructureTypeKHR::BOTTOM_LEVEL)
             .flags(vk::BuildAccelerationStructureFlagsKHR::PREFER_FAST_TRACE)
@@ -292,47 +292,42 @@ fn tlas_setup(
         device.destroy_buffer(unit_box_buffer, None);
         allocator.dealloc(AshMemoryDevice::wrap(&device), unit_box_mem);
 
-
-
-
-        let desc_set_layout = device.create_descriptor_set_layout(
-            &vk::DescriptorSetLayoutCreateInfo::builder()
-                .flags(vk::DescriptorSetLayoutCreateFlags::empty())
-                .bindings(&[
-                    vk::DescriptorSetLayoutBinding::builder()
-                    .binding(0)
-                    .descriptor_type(vk::DescriptorType::ACCELERATION_STRUCTURE_KHR)
-                    .descriptor_count(1)
-                    .stage_flags(vk::ShaderStageFlags::RAYGEN_KHR)
-                    .build()
-                ])
-                .build(),
+        let desc_set_layout = device
+            .create_descriptor_set_layout(
+                &vk::DescriptorSetLayoutCreateInfo::builder()
+                    .flags(vk::DescriptorSetLayoutCreateFlags::empty())
+                    .bindings(&[vk::DescriptorSetLayoutBinding::builder()
+                        .binding(0)
+                        .descriptor_type(vk::DescriptorType::ACCELERATION_STRUCTURE_KHR)
+                        .descriptor_count(1)
+                        .stage_flags(vk::ShaderStageFlags::RAYGEN_KHR)
+                        .build()])
+                    .build(),
                 None,
-            ).unwrap();
-        let desc_pool = device.create_descriptor_pool(
-            &vk::DescriptorPoolCreateInfo::builder()
-            .flags(vk::DescriptorPoolCreateFlags::empty())
-            .max_sets(1)
-            .pool_sizes(&[
-                vk::DescriptorPoolSize {
-                    ty: vk::DescriptorType::ACCELERATION_STRUCTURE_KHR,
-                    descriptor_count: 1
-                }
-            ])
-            .build(),
-            None,
-        ).unwrap();
+            )
+            .unwrap();
+        let desc_pool = device
+            .create_descriptor_pool(
+                &vk::DescriptorPoolCreateInfo::builder()
+                    .flags(vk::DescriptorPoolCreateFlags::empty())
+                    .max_sets(1)
+                    .pool_sizes(&[vk::DescriptorPoolSize {
+                        ty: vk::DescriptorType::ACCELERATION_STRUCTURE_KHR,
+                        descriptor_count: 1,
+                    }])
+                    .build(),
+                None,
+            )
+            .unwrap();
         let mut desc_set = vk::DescriptorSet::null();
-        let result = device
-            .fp_v1_0()
-            .allocate_descriptor_sets(
-                device.handle(),
-                &vk::DescriptorSetAllocateInfo::builder()
+        let result = device.fp_v1_0().allocate_descriptor_sets(
+            device.handle(),
+            &vk::DescriptorSetAllocateInfo::builder()
                 .descriptor_pool(desc_pool)
                 .set_layouts(&[desc_set_layout])
                 .build(),
-                &mut desc_set
-            );
+            &mut desc_set,
+        );
         assert_eq!(result, vk::Result::SUCCESS);
         let tlas_state = TlasState {
             unit_box_as,
@@ -400,9 +395,7 @@ fn tlas_update(
             let mat = transform.compute_matrix().transpose().to_cols_array();
             unsafe {
                 let mut instance = vk::AccelerationStructureInstanceKHR {
-                    transform: vk::TransformMatrixKHR {
-                        matrix: [0.0; 12],
-                    },
+                    transform: vk::TransformMatrixKHR { matrix: [0.0; 12] },
                     instance_custom_index_and_mask: u32::MAX,
                     instance_shader_binding_table_record_offset_and_flags: 0,
                     acceleration_structure_reference: vk::AccelerationStructureReferenceKHR {
@@ -459,17 +452,17 @@ fn tlas_update(
     };
 
     let build_geometry = [vk::AccelerationStructureGeometryKHR::builder()
-    .geometry_type(vk::GeometryTypeKHR::INSTANCES)
-    .flags(vk::GeometryFlagsKHR::default())
-    .geometry(vk::AccelerationStructureGeometryDataKHR {
-        instances: vk::AccelerationStructureGeometryInstancesDataKHR::builder()
-            .array_of_pointers(false)
-            .data(vk::DeviceOrHostAddressConstKHR {
-                device_address: data_device_addr,
-            })
-            .build(),
-    })
-    .build()];
+        .geometry_type(vk::GeometryTypeKHR::INSTANCES)
+        .flags(vk::GeometryFlagsKHR::default())
+        .geometry(vk::AccelerationStructureGeometryDataKHR {
+            instances: vk::AccelerationStructureGeometryInstancesDataKHR::builder()
+                .array_of_pointers(false)
+                .data(vk::DeviceOrHostAddressConstKHR {
+                    device_address: data_device_addr,
+                })
+                .build(),
+        })
+        .build()];
 
     let mut build_geometry_info = vk::AccelerationStructureBuildGeometryInfoKHR::builder()
         .ty(vk::AccelerationStructureTypeKHR::TOP_LEVEL)
@@ -525,7 +518,8 @@ fn tlas_update(
                 .buffer(scratch_buf)
                 .build(),
         );
-        let scratch_device_address = crate::util::round_up(scratch_device_address, scratch_alignment);
+        let scratch_device_address =
+            crate::util::round_up(scratch_device_address, scratch_alignment);
 
         let as_buf = device
             .create_buffer(
@@ -630,23 +624,18 @@ fn tlas_update(
         println!("We did it");
         state.command_buffer = command_buffer;
 
-
         let tlass = [tlas];
         let write_desc_set_as = vk::WriteDescriptorSetAccelerationStructureKHR::builder()
             .acceleration_structures(&tlass)
             .build();
         let mut write_desc_set = vk::WriteDescriptorSet::builder()
-        .dst_set(state.desc_set)
-        .dst_binding(0)
-        .descriptor_type(vk::DescriptorType::ACCELERATION_STRUCTURE_KHR)
-        .build();
+            .dst_set(state.desc_set)
+            .dst_binding(0)
+            .descriptor_type(vk::DescriptorType::ACCELERATION_STRUCTURE_KHR)
+            .build();
         write_desc_set.p_next = &write_desc_set_as as *const _ as *const c_void;
         write_desc_set.descriptor_count = 1;
         println!("Update desc sets");
-        device.update_descriptor_sets(&[
-            write_desc_set
-        ],
-        &[]
-        );
+        device.update_descriptor_sets(&[write_desc_set], &[]);
     }
 }
