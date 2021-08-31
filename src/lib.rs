@@ -12,8 +12,6 @@ use device_info::DeviceInfo;
 use bevy::prelude::*;
 
 use ash::vk;
-use bevy::window::WindowCreated;
-use bevy::winit::WinitWindows;
 use std::borrow::Cow;
 use std::ffi::CStr;
 
@@ -28,9 +26,9 @@ pub struct DustPlugin;
 impl Plugin for DustPlugin {
     fn build(&self, app: &mut App) {
         self.initialize(app);
-        app.add_startup_system_to_stage(StartupStage::PreStartup, setup)
-            .add_plugin(render::RenderPlugin::default())
-            .add_plugin(tlas::TlasPlugin::default());
+        //app
+        //.add_plugin(render::RenderPlugin::default())
+        //.add_plugin(tlas::TlasPlugin::default());
     }
 }
 impl DustPlugin {
@@ -41,30 +39,28 @@ impl DustPlugin {
 
             let instance_extensions = self.instance_extensions(&entry);
             let instance = entry
-            .create_instance(
-                &vk::InstanceCreateInfo::builder()
-                    .application_info(
-                        &vk::ApplicationInfo::builder()
-                            .application_name(&CStr::from_bytes_with_nul_unchecked(
-                                b"Dust Application\0",
-                            ))
-                            .application_version(0)
-                            .engine_name(&CStr::from_bytes_with_nul_unchecked(
-                                b"Dust Engine\0",
-                            ))
-                            .engine_version(0)
-                            .api_version(api_version),
-                    )
-                    .enabled_extension_names(
-                        &instance_extensions
-                            .iter()
-                            .map(|&str| str.as_ptr())
-                            .collect::<Vec<_>>(),
-                    )
-                    .enabled_layer_names(&[]),
-                None,
-            )
-            .unwrap();
+                .create_instance(
+                    &vk::InstanceCreateInfo::builder()
+                        .application_info(
+                            &vk::ApplicationInfo::builder()
+                                .application_name(&CStr::from_bytes_with_nul_unchecked(
+                                    b"Dust Application\0",
+                                ))
+                                .application_version(0)
+                                .engine_name(&CStr::from_bytes_with_nul_unchecked(b"Dust Engine\0"))
+                                .engine_version(0)
+                                .api_version(api_version),
+                        )
+                        .enabled_extension_names(
+                            &instance_extensions
+                                .iter()
+                                .map(|&str| str.as_ptr())
+                                .collect::<Vec<_>>(),
+                        )
+                        .enabled_layer_names(&[]),
+                    None,
+                )
+                .unwrap();
 
             let (physical_device, device_info) = {
                 let available_physical_devices: Vec<_> = instance
@@ -179,7 +175,10 @@ impl DustPlugin {
                 ash::extensions::khr::RayTracingPipeline::name(),
             ];
             let mut device_extensions_ptrs: [*const i8; 4] = [std::ptr::null(); 4];
-            for (ptr, &cstr) in device_extensions_ptrs.iter_mut().zip(device_extensions.iter()) {
+            for (ptr, &cstr) in device_extensions_ptrs
+                .iter_mut()
+                .zip(device_extensions.iter())
+            {
                 *ptr = cstr.as_ptr();
             }
             let device = instance
@@ -205,26 +204,22 @@ impl DustPlugin {
                             sparse_binding: 1,
                             sparse_residency_buffer: 1,
                             shader_storage_image_write_without_format: 1,
+                            image_cube_array: 1,
                             ..Default::default()
                         })
                         .push_next(
-                            &mut vk::PhysicalDeviceShaderFloat16Int8Features::builder()
+                            &mut vk::PhysicalDeviceVulkan12Features::builder()
                                 .shader_int8(false)
+                                .uniform_and_storage_buffer8_bit_access(true)
+                                .buffer_device_address(true)
+                                .timeline_semaphore(true)
+                                .imageless_framebuffer(true)
+                                .descriptor_indexing(true)
                                 .build(),
                         )
                         .push_next(
                             &mut vk::PhysicalDevice16BitStorageFeatures::builder()
                                 .storage_buffer16_bit_access(true)
-                                .build(),
-                        )
-                        .push_next(
-                            &mut vk::PhysicalDevice8BitStorageFeatures::builder()
-                                .uniform_and_storage_buffer8_bit_access(true)
-                                .build(),
-                        )
-                        .push_next(
-                            &mut vk::PhysicalDeviceBufferDeviceAddressFeatures::builder()
-                                .buffer_device_address(true)
                                 .build(),
                         )
                         .push_next(
@@ -237,11 +232,7 @@ impl DustPlugin {
                                 .ray_tracing_pipeline(true)
                                 .build(),
                         )
-                        .push_next(
-                            &mut vk::PhysicalDeviceTimelineSemaphoreFeatures::builder()
-                            .timeline_semaphore(true)
-                            .build()
-                        ),
+                        .build(),
                     None,
                 )
                 .unwrap();
@@ -252,8 +243,7 @@ impl DustPlugin {
                 transfer_binding_queue_family,
             );
 
-            app
-            .insert_resource(self.create_wgpu_renderer(
+            app.insert_resource(self.create_wgpu_renderer(
                 &entry,
                 &device,
                 &instance,
@@ -285,9 +275,9 @@ impl DustPlugin {
     #[allow(unused_variables)]
     fn instance_extensions(&self, entry: &ash::Entry) -> Vec<&'static CStr> {
         use ash::extensions::*;
-        let mut extensions: Vec<&'static CStr> = Vec::with_capacity(4);
+        let mut extensions: Vec<&'static CStr> = Vec::with_capacity(5);
         extensions.push(khr::Surface::name());
-
+        extensions.push(vk::KhrGetPhysicalDeviceProperties2Fn::name());
         #[cfg(target_os = "windows")]
         extensions.push(khr::Win32Surface::name());
 
@@ -375,7 +365,7 @@ impl DustPlugin {
             instance.clone(),
             driver_api_version,
             instance_extensions,
-            hal::InstanceFlags::DEBUG | hal::InstanceFlags::VALIDATION,
+            hal::InstanceFlags::empty(), // TODO: enable debug flags
             Box::new(0),
         )
         .unwrap();
@@ -384,46 +374,31 @@ impl DustPlugin {
             .expect("Unable to obtain adapter");
         let hal_device = hal_exposed_adapter
             .adapter
-            .device_from_raw(device.clone(), device_extensions, queue.graphics_queue_family, 0)
+            .device_from_raw(
+                device.clone(),
+                device_extensions,
+                queue.graphics_queue_family,
+                0,
+            )
             .unwrap();
 
         let instance = wgpu::Instance::from_hal::<hal::api::Vulkan>(hal_instance);
         let adapter = instance.create_adapter_from_hal(hal_exposed_adapter);
         let (device, queue) = adapter
-            .create_device_from_hal(hal_device, &wgpu::DeviceDescriptor {
-                label: Some("ajaja"),
-                features: wgpu::Features::default(),
-                limits: wgpu::Limits::default(),
-            }, None)
+            .create_device_from_hal(
+                hal_device,
+                &wgpu::DeviceDescriptor {
+                    label: Some("ajaja"),
+                    features: wgpu::Features::default(),
+                    limits: wgpu::Limits::default(),
+                },
+                None,
+            )
             .unwrap();
         bevy::render2::renderer::Renderer {
             instance,
             device: Arc::new(device).into(),
             queue: Arc::new(queue),
         }
-    }
-}
-
-fn setup(
-    mut commands: Commands,
-    mut window_created_events: EventReader<WindowCreated>,
-    winit_windows: Res<WinitWindows>,
-    instance: Res<ash::Instance>,
-    physical_device: Res<vk::PhysicalDevice>,
-    entry: Res<ash::Entry>,
-) {
-    let instance = &*instance;
-    let entry = &*entry;
-    let window_id = window_created_events
-        .iter()
-        .next()
-        .map(|event| event.id)
-        .unwrap();
-
-    let winit_window = winit_windows.get_window(window_id).unwrap();
-
-    unsafe {
-        let surface = ash_window::create_surface(entry, instance, winit_window, None).unwrap();
-        commands.insert_resource(surface);
     }
 }

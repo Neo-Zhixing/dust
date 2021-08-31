@@ -7,14 +7,14 @@ resolver = "2"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies.bevy]
-git = "https://github.com/Neo-Zhixing/bevy.git"
-branch="update-to-wgpu-master"
+path = "../bevy"
 default-features = false
 features = [
     "bevy_winit",
     "x11",
     "bevy_render2",
-    "bevy_core_pipeline"
+    "bevy_core_pipeline",
+    "bevy_pbr2"
 ]
 
 
