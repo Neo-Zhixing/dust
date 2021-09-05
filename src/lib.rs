@@ -3,9 +3,7 @@
 
 mod device_info;
 mod queues;
-mod raytracing;
-mod render;
-mod tlas;
+mod raytrace;
 mod util;
 
 use bevy::render2::RenderApp;
@@ -20,7 +18,7 @@ use std::ffi::CStr;
 pub type Allocator = gpu_alloc::GpuAllocator<vk::DeviceMemory>;
 pub type MemoryBlock = gpu_alloc::MemoryBlock<vk::DeviceMemory>;
 pub use queues::Queues;
-pub use tlas::Raytraced;
+pub use raytrace::Raytraced;
 
 #[derive(Default)]
 pub struct DustPlugin;
@@ -33,9 +31,7 @@ impl Plugin for DustPlugin {
             .add_plugin(bevy::pbr2::PbrPlugin::default());
 
         self.extract(app, state);
-        app.add_plugin(raytracing::RaytracingPipelinePlugin::default())
-            //.add_plugin(render::RenderPlugin::default())
-            .add_plugin(tlas::TlasPlugin::default());
+        app.add_plugin(raytrace::RaytracePlugin::default());
     }
 }
 impl DustPlugin {

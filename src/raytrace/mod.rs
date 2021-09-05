@@ -1,11 +1,15 @@
 mod ray_pass_driver;
+mod ray_shaders;
+mod tlas;
+
+pub use tlas::Raytraced;
 
 use bevy::prelude::*;
 use bevy::render2::render_graph::{Node, RenderGraph, SlotInfo, SlotType};
 use bevy::render2::RenderApp;
 
 #[derive(Default)]
-pub struct RaytracingPipelinePlugin;
+pub struct RaytracePlugin;
 
 mod raytracing_graph {
     pub const NAME: &str = "ray_pass";
@@ -16,7 +20,7 @@ mod raytracing_graph {
     }
 }
 
-impl Plugin for RaytracingPipelinePlugin {
+impl Plugin for RaytracePlugin {
     fn build(&self, app: &mut App) {
         let render_app = app.sub_app(RenderApp);
 
@@ -65,6 +69,9 @@ impl Plugin for RaytracingPipelinePlugin {
             ray_pass_driver::RayPassDriverNode::NAME,
             ray_pass_driver::RayPassDriverNode,
         );
+
+        render_app.add_plugin(tlas::TlasPlugin::default());
+        render_app.init_resource::<ray_shaders::RayShaders>();
     }
 }
 

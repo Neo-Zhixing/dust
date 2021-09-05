@@ -2,12 +2,12 @@ use shaderc::{IncludeCallbackResult, IncludeType, ResolvedInclude};
 use std::path::Path;
 
 const GLSL_ENTRY_FILES: [&str; 4] = [
-    "./src/render/shaders/closest_hit.rchit",
-    "./src/render/shaders/miss.rmiss",
-    "./src/render/shaders/raygen.rgen",
-    "./src/render/shaders/esvo.rint",
+    "./src/raytrace/shaders/closest_hit.rchit",
+    "./src/raytrace/shaders/miss.rmiss",
+    "./src/raytrace/shaders/raygen.rgen",
+    "./src/raytrace/shaders/esvo.rint",
 ];
-const GLSL_INCLUDE_DIR: &str = "./src/render/shaders";
+const GLSL_INCLUDE_DIR: &str = "./src/raytrace/shaders";
 const MAX_INCLUDE_DEPTH: usize = 10;
 
 fn include_callback(

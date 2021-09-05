@@ -19,11 +19,8 @@ pub struct TlasPlugin;
 
 impl Plugin for TlasPlugin {
     fn build(&self, app: &mut App) {
-        let render_app = app.sub_app(RenderApp);
-        tlas_setup(render_app);
-        app.sub_app(RenderApp)
-            .add_system_to_stage(RenderStage::Extract, tlas_update);
-        println!("system added");
+        tlas_setup(app);
+        app.add_system_to_stage(RenderStage::Extract, tlas_update);
         //.add_system_to_stage(
         //    CoreStage::PostUpdate,
         //    tlas_update.after(bevy::transform::TransformSystem::TransformPropagate),
