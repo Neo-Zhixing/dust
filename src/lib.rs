@@ -33,9 +33,9 @@ impl Plugin for DustPlugin {
             .add_plugin(bevy::pbr2::PbrPlugin::default());
 
         self.extract(app, state);
-        app.add_plugin(raytracing::RaytracingPipelinePlugin::default());
-        //.add_plugin(render::RenderPlugin::default())
-        //.add_plugin(tlas::TlasPlugin::default());
+        app.add_plugin(raytracing::RaytracingPipelinePlugin::default())
+            //.add_plugin(render::RenderPlugin::default())
+            .add_plugin(tlas::TlasPlugin::default());
     }
 }
 impl DustPlugin {

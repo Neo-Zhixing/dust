@@ -1,7 +1,11 @@
 use std::{ffi::c_void, intrinsics::copy, mem::MaybeUninit};
 
 use ash::vk;
-use bevy::prelude::*;
+use bevy::{
+    ecs::system::SystemState,
+    prelude::*,
+    render2::{RenderApp, RenderStage, RenderWorld},
+};
 use gpu_alloc_ash::AshMemoryDevice;
 
 use crate::{device_info::DeviceInfo, Queues};
@@ -15,8 +19,11 @@ pub struct TlasPlugin;
 
 impl Plugin for TlasPlugin {
     fn build(&self, app: &mut App) {
-        app.add_startup_system_to_stage(StartupStage::Startup, tlas_setup)
-            .add_startup_system_to_stage(StartupStage::PostStartup, tlas_update);
+        let render_app = app.sub_app(RenderApp);
+        tlas_setup(render_app);
+        app.sub_app(RenderApp)
+            .add_system_to_stage(RenderStage::Extract, tlas_update);
+        println!("system added");
         //.add_system_to_stage(
         //    CoreStage::PostUpdate,
         //    tlas_update.after(bevy::transform::TransformSystem::TransformPropagate),
@@ -38,14 +45,17 @@ pub struct TlasState {
     pub desc_set: vk::DescriptorSet,
 }
 
-fn tlas_setup(
-    mut commands: Commands,
-    device: Res<ash::Device>,
-    mut allocator: ResMut<crate::Allocator>,
-    queues: Res<Queues>,
-    device_info: Res<DeviceInfo>,
-    acceleration_structure_loader: Res<ash::extensions::khr::AccelerationStructure>,
-) {
+fn tlas_setup(app: &mut App) {
+    let (device, mut allocator, queues, device_info, acceleration_structure_loader) =
+        SystemState::<(
+            Res<ash::Device>,
+            ResMut<crate::Allocator>,
+            Res<Queues>,
+            Res<DeviceInfo>,
+            Res<ash::extensions::khr::AccelerationStructure>,
+        )>::new(&mut app.world)
+        .get_mut(&mut app.world);
+
     unsafe {
         let command_pool = device
             .create_command_pool(
@@ -342,23 +352,31 @@ fn tlas_setup(
             desc_pool,
             desc_set,
         };
-        commands.insert_resource(tlas_state);
+        println!("Inserted tlas state");
+        app.insert_resource(tlas_state);
     }
 }
 
 fn tlas_update(
-    mut state: ResMut<TlasState>,
-    device: Res<ash::Device>,
-    queues: Res<Queues>,
-    acceleration_structure_loader: Res<ash::extensions::khr::AccelerationStructure>,
-    mut allocator: ResMut<crate::Allocator>,
-    device_info: Res<DeviceInfo>,
+    mut render_world: ResMut<RenderWorld>,
     anything_changed_query: Query<
         (&GlobalTransform, &Raytraced),
         Or<(Changed<GlobalTransform>, Changed<Raytraced>)>,
     >,
     entities_query: Query<(&GlobalTransform, &Raytraced)>,
 ) {
+    let render_world = &mut *render_world;
+    let (device, mut state, queues, acceleration_structure_loader, mut allocator, device_info) =
+        SystemState::<(
+            Res<ash::Device>,
+            ResMut<TlasState>,
+            Res<Queues>,
+            Res<ash::extensions::khr::AccelerationStructure>,
+            ResMut<crate::Allocator>,
+            Res<DeviceInfo>,
+        )>::new(render_world)
+        .get_mut(render_world);
+
     // Clear the command buffer if the update was completed
     let mut have_updates_pending = state.command_buffer != vk::CommandBuffer::null();
     if have_updates_pending {

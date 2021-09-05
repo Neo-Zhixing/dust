@@ -96,7 +96,6 @@ impl Node for RaytracingNode {
         world: &World,
     ) -> Result<(), bevy::render2::render_graph::NodeRunError> {
         let device = world.get_resource::<ash::Device>().unwrap();
-        println!("Raytracing Node ran");
         Ok(())
     }
 }
