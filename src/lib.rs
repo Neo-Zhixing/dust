@@ -3,10 +3,12 @@
 
 mod device_info;
 mod queues;
+mod raytracing;
 mod render;
 mod tlas;
 mod util;
 
+use bevy::render2::RenderApp;
 use device_info::DeviceInfo;
 
 use bevy::prelude::*;
@@ -25,14 +27,30 @@ pub struct DustPlugin;
 
 impl Plugin for DustPlugin {
     fn build(&self, app: &mut App) {
-        self.initialize(app);
-        //app
+        let state = self.initialize(app);
+        app.add_plugin(bevy::render2::RenderPlugin::default())
+            .add_plugin(bevy::core_pipeline::CorePipelinePlugin::default())
+            .add_plugin(bevy::pbr2::PbrPlugin::default());
+
+        self.extract(app, state);
+        app.add_plugin(raytracing::RaytracingPipelinePlugin::default());
         //.add_plugin(render::RenderPlugin::default())
         //.add_plugin(tlas::TlasPlugin::default());
     }
 }
 impl DustPlugin {
-    fn initialize(&self, app: &mut App) {
+    fn initialize(
+        &self,
+        app: &mut App,
+    ) -> (
+        ash::Entry,
+        ash::Device,
+        Queues,
+        ash::Instance,
+        vk::PhysicalDevice,
+        DeviceInfo,
+        ash::extensions::khr::Surface,
+    ) {
         unsafe {
             let entry = ash::Entry::new().unwrap();
             let api_version = vk::make_api_version(0, 1, 2, 0);
@@ -252,7 +270,36 @@ impl DustPlugin {
                 &device_extensions,
                 physical_device,
                 &queues,
-            ))
+            ));
+
+            (
+                entry,
+                device,
+                queues,
+                instance,
+                physical_device,
+                device_info,
+                surface_loader,
+            )
+        }
+    }
+
+    fn extract(
+        &self,
+        app: &mut App,
+        state: (
+            ash::Entry,
+            ash::Device,
+            Queues,
+            ash::Instance,
+            vk::PhysicalDevice,
+            DeviceInfo,
+            ash::extensions::khr::Surface,
+        ),
+    ) {
+        let sub_app = app.sub_app(RenderApp);
+        let (entry, device, queues, instance, physical_device, device_info, surface_loader) = state;
+        sub_app
             .insert_resource(ash::extensions::khr::AccelerationStructure::new(
                 &instance, &device,
             ))
@@ -262,14 +309,17 @@ impl DustPlugin {
             .insert_resource(ash::extensions::khr::DeferredHostOperations::new(
                 &instance, &device,
             ))
-            .insert_resource(self.create_allocator(&device_info))
             .insert_resource(queues)
             .insert_resource(device)
             .insert_resource(entry)
             .insert_resource(instance)
-            .insert_resource(physical_device)
-            .insert_resource(device_info)
-            .insert_resource(surface_loader);
+            .insert_resource(physical_device);
+
+        unsafe {
+            sub_app
+                .insert_resource(self.create_allocator(&device_info))
+                .insert_resource(device_info)
+                .insert_resource(surface_loader);
         }
     }
     #[allow(unused_variables)]
