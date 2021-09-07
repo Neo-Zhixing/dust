@@ -1,12 +1,16 @@
 mod ray_pass_driver;
 mod ray_shaders;
 mod tlas;
+use ash::vk;
 
 pub use tlas::Raytraced;
 
 use bevy::prelude::*;
 use bevy::render2::render_graph::{Node, RenderGraph, SlotInfo, SlotType};
 use bevy::render2::RenderApp;
+
+use self::ray_shaders::RayShaders;
+use self::tlas::TlasState;
 
 #[derive(Default)]
 pub struct RaytracePlugin;
@@ -102,7 +106,66 @@ impl Node for RaytracingNode {
         render_context: &mut bevy::render2::renderer::RenderContext,
         world: &World,
     ) -> Result<(), bevy::render2::render_graph::NodeRunError> {
+        let raytracing_pipeline_loader = world.get_resource::<ash::extensions::khr::RayTracingPipeline>().unwrap();
         let device = world.get_resource::<ash::Device>().unwrap();
+        let ray_shaders  = world.get_resource::<RayShaders>().unwrap();
+        let tlas_state  = world.get_resource::<TlasState>().unwrap();
+        //let view = graph.get_input_entity(Self::IN_VIEW).unwrap();
+
+
+        let render_target = graph.get_input_texture(Self::IN_COLOR_ATTACHMENT).unwrap();
+        let mut extent: (u32, u32) = (0, 0);
+        let mut texture_view = vk::ImageView::null();
+        render_target.as_hal::<wgpu_hal::api::Vulkan, _>(|texture| {
+            let texture = texture.unwrap();
+            extent = (texture.extent.width, texture.extent.height);
+            texture_view = texture.raw.raw;
+        });
+        unsafe {
+            device.update_descriptor_sets(
+                &[vk::WriteDescriptorSet::builder()
+                    .dst_set(ray_shaders.target_img_desc_set)
+                    .dst_binding(0)
+                    .descriptor_type(vk::DescriptorType::STORAGE_IMAGE)
+                    .image_info(&[vk::DescriptorImageInfo {
+                        sampler: vk::Sampler::null(),
+                        image_view: texture_view,
+                        image_layout: vk::ImageLayout::GENERAL, // TODO: ???
+                    }])
+                    .build()],
+                &[],
+            );
+            render_context.command_encoder.run_raw_command::<wgpu_hal::api::Vulkan, _>(|command_buffer| {
+                let command_buffer = command_buffer.active;
+                assert_ne!(command_buffer, vk::CommandBuffer::null());
+
+                let desc_sets = [ray_shaders.target_img_desc_set, tlas_state.desc_set];
+                device.cmd_bind_descriptor_sets(
+                    command_buffer,
+                    vk::PipelineBindPoint::RAY_TRACING_KHR,
+                    ray_shaders.pipeline_layout,
+                    0,
+                    &desc_sets,
+                    &[],
+                );
+
+                device.cmd_bind_pipeline(
+                    command_buffer,
+                    vk::PipelineBindPoint::RAY_TRACING_KHR,
+                    ray_shaders.pipeline,
+                );
+                raytracing_pipeline_loader.cmd_trace_rays(
+                    command_buffer,
+                    &ray_shaders.raygen_shader_binding_tables,
+                    &ray_shaders.miss_shader_binding_tables,
+                    &ray_shaders.hit_shader_binding_tables,
+                    &ray_shaders.callable_shader_binding_tables,
+                    extent.0,
+                    extent.1,
+                    1,
+                );
+            });
+        }
         Ok(())
     }
 }

@@ -12,6 +12,7 @@ pub struct RayShaders {
     pub pipeline: vk::Pipeline,
     pub pipeline_layout: vk::PipelineLayout,
     pub target_img_desc_layout: vk::DescriptorSetLayout,
+    pub target_img_desc_set: vk::DescriptorSet,
     sbt_mem: gpu_alloc::MemoryBlock<vk::DeviceMemory>,
     sbt_buf: vk::Buffer,
     pub raygen_shader_binding_tables: vk::StridedDeviceAddressRegionKHR,
@@ -22,13 +23,14 @@ pub struct RayShaders {
 
 impl FromWorld for RayShaders {
     fn from_world(world: &mut World) -> Self {
-        let (tlas_state, device, raytracing_loader, device_info, mut allocator) =
+        let (tlas_state, device, raytracing_loader, device_info, mut allocator, desc_pool) =
             SystemState::<(
                 Res<TlasState>,
                 Res<ash::Device>,
                 Res<ash::extensions::khr::RayTracingPipeline>,
                 Res<DeviceInfo>,
                 ResMut<crate::Allocator>,
+                Res<vk::DescriptorPool>,
             )>::new(world)
             .get_mut(world);
 
@@ -46,6 +48,15 @@ impl FromWorld for RayShaders {
                     None,
                 )
                 .unwrap();
+            let mut target_img_desc_set = vk::DescriptorSet::null();
+            let result = device.fp_v1_0().allocate_descriptor_sets(
+                device.handle(),
+                &vk::DescriptorSetAllocateInfo::builder()
+                .descriptor_pool(*desc_pool)
+                .set_layouts(&[target_img_desc_layout])
+                .build(),
+                &mut target_img_desc_set);
+            assert_eq!(result, vk::Result::SUCCESS);
 
             let pipeline_layout = device
                 .create_pipeline_layout(
@@ -316,6 +327,7 @@ impl FromWorld for RayShaders {
                 pipeline: raytracing_pipeline,
                 pipeline_layout,
                 target_img_desc_layout,
+                target_img_desc_set,
                 sbt_buf,
                 sbt_mem,
                 raygen_shader_binding_tables: vk::StridedDeviceAddressRegionKHR {

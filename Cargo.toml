@@ -23,9 +23,9 @@ ash = "0.33"
 ash-window = "0.7"
 gpu-alloc = "0.5.0"
 gpu-alloc-ash = "0.2.0"
-wgpu = { version = "0.10.0", features = ["spirv"] }
-wgpu-hal = "*"
-wgpu-types = "*"
+wgpu = { path = "../wgpu/wgpu", features = ["spirv"] }
+wgpu-hal = { path = "../wgpu/wgpu-hal" }
+wgpu-types = { path = "../wgpu/wgpu-types" }
 
 [build-dependencies]
 shaderc = "0.7"

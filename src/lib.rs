@@ -295,6 +295,25 @@ impl DustPlugin {
     ) {
         let sub_app = app.sub_app(RenderApp);
         let (entry, device, queues, instance, physical_device, device_info, surface_loader) = state;
+        let desc_pool = unsafe {
+            // This desc pool will be added as a resource to render world
+            // Change this whenever you need space for a new global desc set
+            device.create_descriptor_pool(&vk::DescriptorPoolCreateInfo::builder()
+            .flags(vk::DescriptorPoolCreateFlags::empty())
+            .max_sets(2)
+            .pool_sizes(&[
+                vk::DescriptorPoolSize {
+                    ty: vk::DescriptorType::STORAGE_TEXEL_BUFFER,
+                    descriptor_count: 1,
+                },
+                vk::DescriptorPoolSize {
+                    ty: vk::DescriptorType::ACCELERATION_STRUCTURE_KHR,
+                    descriptor_count: 1,
+                }
+            ])
+            .build(), None).unwrap()
+        };
+
         sub_app
             .insert_resource(ash::extensions::khr::AccelerationStructure::new(
                 &instance, &device,
@@ -305,6 +324,7 @@ impl DustPlugin {
             .insert_resource(ash::extensions::khr::DeferredHostOperations::new(
                 &instance, &device,
             ))
+            .insert_resource(desc_pool)
             .insert_resource(queues)
             .insert_resource(device)
             .insert_resource(entry)
@@ -412,7 +432,7 @@ impl DustPlugin {
             driver_api_version,
             instance_extensions,
             hal::InstanceFlags::empty(), // TODO: enable debug flags
-            Box::new(0),
+            None,
         )
         .unwrap();
         let hal_exposed_adapter = hal_instance
@@ -422,6 +442,7 @@ impl DustPlugin {
             .adapter
             .device_from_raw(
                 device.clone(),
+                false,
                 device_extensions,
                 queue.graphics_queue_family,
                 0,

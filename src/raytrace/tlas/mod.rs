@@ -38,18 +38,18 @@ pub struct TlasState {
     needs_update_next_frame: bool,
     fence: vk::Fence,
     pub desc_set_layout: vk::DescriptorSetLayout,
-    desc_pool: vk::DescriptorPool,
     pub desc_set: vk::DescriptorSet,
 }
 
 fn tlas_setup(app: &mut App) {
-    let (device, mut allocator, queues, device_info, acceleration_structure_loader) =
+    let (device, mut allocator, queues, device_info, acceleration_structure_loader, desc_pool) =
         SystemState::<(
             Res<ash::Device>,
             ResMut<crate::Allocator>,
             Res<Queues>,
             Res<DeviceInfo>,
             Res<ash::extensions::khr::AccelerationStructure>,
+            Res<vk::DescriptorPool>,
         )>::new(&mut app.world)
         .get_mut(&mut app.world);
 
@@ -313,24 +313,11 @@ fn tlas_setup(app: &mut App) {
                 None,
             )
             .unwrap();
-        let desc_pool = device
-            .create_descriptor_pool(
-                &vk::DescriptorPoolCreateInfo::builder()
-                    .flags(vk::DescriptorPoolCreateFlags::empty())
-                    .max_sets(1)
-                    .pool_sizes(&[vk::DescriptorPoolSize {
-                        ty: vk::DescriptorType::ACCELERATION_STRUCTURE_KHR,
-                        descriptor_count: 1,
-                    }])
-                    .build(),
-                None,
-            )
-            .unwrap();
         let mut desc_set = vk::DescriptorSet::null();
         let result = device.fp_v1_0().allocate_descriptor_sets(
             device.handle(),
             &vk::DescriptorSetAllocateInfo::builder()
-                .descriptor_pool(desc_pool)
+                .descriptor_pool(*desc_pool)
                 .set_layouts(&[desc_set_layout])
                 .build(),
             &mut desc_set,
@@ -346,10 +333,8 @@ fn tlas_setup(app: &mut App) {
             fence,
             needs_update_next_frame: false,
             desc_set_layout,
-            desc_pool,
             desc_set,
         };
-        println!("Inserted tlas state");
         app.insert_resource(tlas_state);
     }
 }
