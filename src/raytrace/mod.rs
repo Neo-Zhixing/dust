@@ -73,6 +73,7 @@ impl Plugin for RaytracePlugin {
             ray_pass_driver::RayPassDriverNode::NAME,
             ray_pass_driver::RayPassDriverNode,
         );
+        graph.add_node_edge(bevy::core_pipeline::node::MAIN_PASS_DRIVER, ray_pass_driver::RayPassDriverNode::NAME).unwrap();
 
         render_app.add_plugin(tlas::TlasPlugin::default());
         render_app.init_resource::<ray_shaders::RayShaders>();

@@ -13,7 +13,7 @@ void main() {
     const vec2 pixelUV = (vec2(gl_LaunchIDEXT.xy) + vec2(0.5)) / vec2(gl_LaunchSizeEXT.xy);
     const vec2 cameraSpace = pixelUV * 2.0 - 1.0;
 
-
+  payload.color = vec3(0.0, 0.0, 0.0);
     traceRayEXT(accelerationStructure, // acceleration structure
         gl_RayFlagsNoneEXT,       // rayFlags
         0xFF,           // cullMask
@@ -27,5 +27,7 @@ void main() {
         0               // payload (location = 0)
   );
 
-  imageStore(imgOutput, ivec2(gl_LaunchIDEXT.xy), vec4(payload.color, 1.0));
+  if (!(payload.color.x == 0 && payload.color.y == 0 && payload.color.z == 0)) {
+    imageStore(imgOutput, ivec2(gl_LaunchIDEXT.xy), vec4(payload.color, 1.0));
+  }
 }
