@@ -9,6 +9,8 @@ use bevy::prelude::*;
 use bevy::render2::render_graph::{Node, RenderGraph, SlotInfo, SlotType};
 use bevy::render2::RenderApp;
 
+use crate::Queues;
+
 use self::ray_shaders::RayShaders;
 use self::tlas::TlasState;
 
@@ -111,17 +113,24 @@ impl Node for RaytracingNode {
         let device = world.get_resource::<ash::Device>().unwrap();
         let ray_shaders  = world.get_resource::<RayShaders>().unwrap();
         let tlas_state  = world.get_resource::<TlasState>().unwrap();
-        //let view = graph.get_input_entity(Self::IN_VIEW).unwrap();
+        let queues = world.get_resource::<Queues>().unwrap();
+        //let view = graph.get_input_entit y(Self::IN_VIEW).unwrap();
 
 
         let render_target = graph.get_input_texture(Self::IN_COLOR_ATTACHMENT).unwrap();
         let mut extent: (u32, u32) = (0, 0);
-        let mut texture_view = vk::ImageView::null();
+        let mut image_view = vk::ImageView::null();
+        let mut image = vk::Image::null();
         render_target.as_hal::<wgpu_hal::api::Vulkan, _>(|texture| {
             let texture = texture.unwrap();
             extent = (texture.extent.width, texture.extent.height);
-            texture_view = texture.raw.raw;
+            image_view = texture.raw.raw;
         });
+        unsafe {
+            render_target.get_texture().as_hal::<wgpu_hal::api::Vulkan, _>(|texture| {
+                image = texture.unwrap().raw_handle()
+            });
+        }
         unsafe {
             device.update_descriptor_sets(
                 &[vk::WriteDescriptorSet::builder()
@@ -130,7 +139,7 @@ impl Node for RaytracingNode {
                     .descriptor_type(vk::DescriptorType::STORAGE_IMAGE)
                     .image_info(&[vk::DescriptorImageInfo {
                         sampler: vk::Sampler::null(),
-                        image_view: texture_view,
+                        image_view,
                         image_layout: vk::ImageLayout::GENERAL, // TODO: ???
                     }])
                     .build()],
@@ -149,7 +158,32 @@ impl Node for RaytracingNode {
                     &desc_sets,
                     &[],
                 );
-
+                device.cmd_pipeline_barrier(
+                    command_buffer,
+                    vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT,
+                    vk::PipelineStageFlags::RAY_TRACING_SHADER_KHR,
+                    vk::DependencyFlags::BY_REGION,
+                    &[],
+                    &[],
+                    &[
+                        vk::ImageMemoryBarrier::builder()
+                        .src_access_mask(vk::AccessFlags::COLOR_ATTACHMENT_WRITE)
+                        .dst_access_mask(vk::AccessFlags::SHADER_READ)
+                        .old_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
+                        .new_layout(vk::ImageLayout::GENERAL)
+                        .src_queue_family_index(queues.graphics_queue_family)
+                        .dst_queue_family_index(queues.graphics_queue_family)
+                        .image(image)
+                        .subresource_range(vk::ImageSubresourceRange {
+                            aspect_mask: vk::ImageAspectFlags::COLOR,
+                            base_mip_level: 0,
+                            level_count: 1,
+                            base_array_layer: 0,
+                            layer_count: 1,
+                        })
+                        .build()
+                    ]
+                );
                 device.cmd_bind_pipeline(
                     command_buffer,
                     vk::PipelineBindPoint::RAY_TRACING_KHR,
@@ -164,6 +198,32 @@ impl Node for RaytracingNode {
                     extent.0,
                     extent.1,
                     1,
+                );
+                device.cmd_pipeline_barrier(
+                    command_buffer,
+                    vk::PipelineStageFlags::RAY_TRACING_SHADER_KHR,
+                    vk::PipelineStageFlags::BOTTOM_OF_PIPE,
+                    vk::DependencyFlags::BY_REGION,
+                    &[],
+                    &[],
+                    &[
+                        vk::ImageMemoryBarrier::builder()
+                        .src_access_mask(vk::AccessFlags::SHADER_WRITE)
+                        .dst_access_mask(vk::AccessFlags::empty())
+                        .old_layout(vk::ImageLayout::GENERAL)
+                        .new_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
+                        .src_queue_family_index(queues.graphics_queue_family)
+                        .dst_queue_family_index(queues.graphics_queue_family)
+                        .image(image)
+                        .subresource_range(vk::ImageSubresourceRange {
+                            aspect_mask: vk::ImageAspectFlags::COLOR,
+                            base_mip_level: 0,
+                            level_count: 1,
+                            base_array_layer: 0,
+                            layer_count: 1,
+                        })
+                        .build()
+                    ]
                 );
             });
         }
