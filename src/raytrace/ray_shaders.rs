@@ -4,6 +4,7 @@ use gpu_alloc_ash::AshMemoryDevice;
 
 use super::tlas::TlasState;
 use crate::device_info::DeviceInfo;
+use crate::raytrace::RaytracingNodeViewConstants;
 use ash::vk;
 use std::ffi::CStr;
 use std::io::Cursor;
@@ -62,6 +63,13 @@ impl FromWorld for RayShaders {
                 .create_pipeline_layout(
                     &vk::PipelineLayoutCreateInfo::builder()
                         .set_layouts(&[target_img_desc_layout, tlas_state.desc_set_layout])
+                        .push_constant_ranges(&[
+                            vk::PushConstantRange {
+                                stage_flags: vk::ShaderStageFlags::RAYGEN_KHR,
+                                offset: 0,
+                                size: std::mem::size_of::<RaytracingNodeViewConstants>() as u32
+                            }
+                        ])
                         .build(),
                     None,
                 )

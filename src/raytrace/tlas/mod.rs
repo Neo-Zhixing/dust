@@ -392,7 +392,10 @@ fn tlas_update(
         .iter()
         .map(|(transform, aabb)| {
             println!("data is {:?}", aabb);
-            let mat = transform.compute_matrix().transpose().to_cols_array();
+            // We use the same unit box BLAS for all instances. So, we change the shape of the unit box by streching it.
+            let scale = transform.scale * aabb.aabb_extent;
+            let mat = Mat4::from_scale_rotation_translation(scale, transform.rotation, transform.translation);
+            let mat = mat.transpose().to_cols_array();
             unsafe {
                 let mut instance = vk::AccelerationStructureInstanceKHR {
                     transform: vk::TransformMatrixKHR { matrix: [0.0; 12] },

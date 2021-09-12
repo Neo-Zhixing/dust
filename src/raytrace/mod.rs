@@ -3,6 +3,8 @@ mod ray_shaders;
 mod tlas;
 use ash::vk;
 
+use bevy::render2::camera::PerspectiveProjection;
+use bevy::render2::view::{ExtractedView, ViewMeta, ViewUniform, ViewUniformOffset};
 pub use tlas::Raytraced;
 
 use bevy::prelude::*;
@@ -94,6 +96,18 @@ impl RaytracingNode {
     }
 }
 
+struct RaytracingNodeViewConstants {
+    pub camera_view_col0: [f32; 3],
+    pub padding0: f32,
+    pub camera_view_col1: [f32; 3],
+    pub padding1: f32,
+    pub camera_view_col2: [f32; 3],
+    pub padding2: f32,
+
+    pub camera_position: Vec3,
+    pub tan_half_fov: f32,
+}
+
 impl Node for RaytracingNode {
     fn input(&self) -> Vec<SlotInfo> {
         vec![
@@ -111,19 +125,34 @@ impl Node for RaytracingNode {
     ) -> Result<(), bevy::render2::render_graph::NodeRunError> {
         let raytracing_pipeline_loader = world.get_resource::<ash::extensions::khr::RayTracingPipeline>().unwrap();
         let device = world.get_resource::<ash::Device>().unwrap();
+        let view_meta = world.get_resource::<ViewMeta>().unwrap();
         let ray_shaders  = world.get_resource::<RayShaders>().unwrap();
         let tlas_state  = world.get_resource::<TlasState>().unwrap();
         let queues = world.get_resource::<Queues>().unwrap();
-        //let view = graph.get_input_entit y(Self::IN_VIEW).unwrap();
-
+        let view = graph.get_input_entity(Self::IN_VIEW).unwrap();
+        let view = world.get_entity(view).unwrap();
+        let projection = view.get::<PerspectiveProjection>().unwrap();
+        let view =view.get::<ExtractedView>().unwrap();
+        let extent: (u32, u32) = (view.width, view.height);
+        println!("{:?}", view.transform);
+        let view = unsafe {
+            let rotation_matrix = Mat3::from_quat(view.transform.rotation).to_cols_array_2d();
+            let mut contants: RaytracingNodeViewConstants = std::mem::MaybeUninit::uninit().assume_init();
+            contants.camera_view_col0 = rotation_matrix[0];
+            contants.camera_view_col1 = rotation_matrix[1];
+            contants.camera_view_col2 = rotation_matrix[2];
+            contants.camera_position = view.transform.translation;
+            contants.tan_half_fov = (projection.fov / 2.0).tan(); // TODO
+            contants
+        };
 
         let render_target = graph.get_input_texture(Self::IN_COLOR_ATTACHMENT).unwrap();
-        let mut extent: (u32, u32) = (0, 0);
         let mut image_view = vk::ImageView::null();
         let mut image = vk::Image::null();
         render_target.as_hal::<wgpu_hal::api::Vulkan, _>(|texture| {
             let texture = texture.unwrap();
-            extent = (texture.extent.width, texture.extent.height);
+            assert_eq!(extent.0, texture.extent.width);
+            assert_eq!(extent.1, texture.extent.height);
             image_view = texture.raw.raw;
         });
         unsafe {
@@ -150,14 +179,6 @@ impl Node for RaytracingNode {
                 assert_ne!(command_buffer, vk::CommandBuffer::null());
 
                 let desc_sets = [ray_shaders.target_img_desc_set, tlas_state.desc_set];
-                device.cmd_bind_descriptor_sets(
-                    command_buffer,
-                    vk::PipelineBindPoint::RAY_TRACING_KHR,
-                    ray_shaders.pipeline_layout,
-                    0,
-                    &desc_sets,
-                    &[],
-                );
                 device.cmd_pipeline_barrier(
                     command_buffer,
                     vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT,
@@ -183,6 +204,21 @@ impl Node for RaytracingNode {
                         })
                         .build()
                     ]
+                );
+                device.cmd_bind_descriptor_sets(
+                    command_buffer,
+                    vk::PipelineBindPoint::RAY_TRACING_KHR,
+                    ray_shaders.pipeline_layout,
+                    0,
+                    &desc_sets,
+                    &[],
+                );
+                device.cmd_push_constants(
+                    command_buffer,
+                    ray_shaders.pipeline_layout,
+                    vk::ShaderStageFlags::RAYGEN_KHR,
+                    0,
+                    &std::slice::from_raw_parts(&view as *const RaytracingNodeViewConstants as *const u8, std::mem::size_of_val(&view))
                 );
                 device.cmd_bind_pipeline(
                     command_buffer,

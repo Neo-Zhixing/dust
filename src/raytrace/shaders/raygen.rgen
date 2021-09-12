@@ -7,11 +7,22 @@
 layout(location = 0) rayPayloadEXT RayPayload payload;
 layout(set = 0, binding = 0) uniform writeonly image2D imgOutput;
 layout(set = 1, binding = 0) uniform accelerationStructureEXT accelerationStructure;
+layout(push_constant) uniform constants {
+      mat3 rotation;
+    vec3 position;
+    float tanHalfFov;
+} PushConstants;
 
 
 void main() {
-    const vec2 pixelUV = (vec2(gl_LaunchIDEXT.xy) + vec2(0.5)) / vec2(gl_LaunchSizeEXT.xy);
-    const vec2 cameraSpace = pixelUV * 2.0 - 1.0;
+    const vec2 pixelNDC = (vec2(gl_LaunchIDEXT.xy) + vec2(0.5)) / vec2(gl_LaunchSizeEXT.xy);
+    vec2 pixelCamera = 2 * pixelNDC - 1;
+    pixelCamera.y *= -1;
+    pixelCamera.x *= float(gl_LaunchSizeEXT.x) / float(gl_LaunchSizeEXT.y);
+    pixelCamera *= PushConstants.tanHalfFov;
+
+    vec3 pixelCameraWorld = PushConstants.rotation * vec3(pixelCamera, -1);
+
 
   payload.color = vec3(0.0, 0.0, 0.0);
     traceRayEXT(accelerationStructure, // acceleration structure
@@ -20,9 +31,9 @@ void main() {
         0,              // sbtRecordOffset
         0,              // sbtRecordStride
         0,              // missIndex
-        vec3(cameraSpace*10, -100.0),     // ray origin
+        PushConstants.position,     // ray origin
         0.0,           // ray min range
-        vec3(0,0,1),  // ray direction
+        pixelCameraWorld,  // ray direction
         1000.0,           // ray max range
         0               // payload (location = 0)
   );
