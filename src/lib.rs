@@ -298,20 +298,25 @@ impl DustPlugin {
         let desc_pool = unsafe {
             // This desc pool will be added as a resource to render world
             // Change this whenever you need space for a new global desc set
-            device.create_descriptor_pool(&vk::DescriptorPoolCreateInfo::builder()
-            .flags(vk::DescriptorPoolCreateFlags::empty())
-            .max_sets(2)
-            .pool_sizes(&[
-                vk::DescriptorPoolSize {
-                    ty: vk::DescriptorType::STORAGE_TEXEL_BUFFER,
-                    descriptor_count: 1,
-                },
-                vk::DescriptorPoolSize {
-                    ty: vk::DescriptorType::ACCELERATION_STRUCTURE_KHR,
-                    descriptor_count: 1,
-                }
-            ])
-            .build(), None).unwrap()
+            device
+                .create_descriptor_pool(
+                    &vk::DescriptorPoolCreateInfo::builder()
+                        .flags(vk::DescriptorPoolCreateFlags::empty())
+                        .max_sets(2)
+                        .pool_sizes(&[
+                            vk::DescriptorPoolSize {
+                                ty: vk::DescriptorType::STORAGE_TEXEL_BUFFER,
+                                descriptor_count: 1,
+                            },
+                            vk::DescriptorPoolSize {
+                                ty: vk::DescriptorType::ACCELERATION_STRUCTURE_KHR,
+                                descriptor_count: 1,
+                            },
+                        ])
+                        .build(),
+                    None,
+                )
+                .unwrap()
         };
 
         sub_app

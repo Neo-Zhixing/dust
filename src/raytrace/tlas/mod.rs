@@ -1,10 +1,10 @@
-use std::{ffi::c_void, intrinsics::copy, mem::MaybeUninit};
+use std::{ffi::c_void, mem::MaybeUninit};
 
 use ash::vk;
 use bevy::{
     ecs::system::SystemState,
     prelude::*,
-    render2::{RenderApp, RenderStage, RenderWorld},
+    render2::{RenderStage, RenderWorld},
 };
 use gpu_alloc_ash::AshMemoryDevice;
 
@@ -394,11 +394,17 @@ fn tlas_update(
             println!("data is {:?}", aabb);
             // We use the same unit box BLAS for all instances. So, we change the shape of the unit box by streching it.
             let scale = transform.scale * aabb.aabb_extent;
-            let mat = Mat4::from_scale_rotation_translation(scale, transform.rotation, transform.translation);
+            let mat = Mat4::from_scale_rotation_translation(
+                scale,
+                transform.rotation,
+                transform.translation,
+            );
             let mat = mat.transpose().to_cols_array();
             unsafe {
                 let mut instance = vk::AccelerationStructureInstanceKHR {
-                    transform: vk::TransformMatrixKHR { matrix: MaybeUninit::uninit().assume_init() },
+                    transform: vk::TransformMatrixKHR {
+                        matrix: MaybeUninit::uninit().assume_init(),
+                    },
                     instance_custom_index_and_mask: u32::MAX,
                     instance_shader_binding_table_record_offset_and_flags: 0,
                     acceleration_structure_reference: vk::AccelerationStructureReferenceKHR {
@@ -439,14 +445,16 @@ fn tlas_update(
         device
             .bind_buffer_memory(data_buf, *data_buf_mem.memory(), data_buf_mem.offset())
             .unwrap();
-        data_buf_mem.write_bytes(
-            AshMemoryDevice::wrap(&*device),
-            0,
-            std::slice::from_raw_parts(
-                data.as_slice() as *const _ as *const u8,
-                std::mem::size_of_val(data.as_slice()),
-            ),
-        );
+        data_buf_mem
+            .write_bytes(
+                AshMemoryDevice::wrap(&*device),
+                0,
+                std::slice::from_raw_parts(
+                    data.as_slice() as *const _ as *const u8,
+                    std::mem::size_of_val(data.as_slice()),
+                ),
+            )
+            .unwrap();
         device.get_buffer_device_address(
             &vk::BufferDeviceAddressInfo::builder()
                 .buffer(data_buf)

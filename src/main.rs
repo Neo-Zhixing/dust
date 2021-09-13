@@ -1,5 +1,3 @@
-use std::str::FromStr;
-
 use bevy::prelude::*;
 use dust_new::Raytraced;
 mod flycamera;
@@ -61,11 +59,12 @@ fn setup(
     });
 
     // camera
-    commands.spawn_bundle(bevy::render2::camera::PerspectiveCameraBundle {
-        transform: Transform::from_xyz(-2.0, 2.5, 5.0).looking_at(Vec3::ZERO, Vec3::Y),
-        ..Default::default()
-    })
-    .insert(flycamera::FlyCamera::default());
+    commands
+        .spawn_bundle(bevy::render2::camera::PerspectiveCameraBundle {
+            transform: Transform::from_xyz(-2.0, 2.5, 5.0).looking_at(Vec3::ZERO, Vec3::Y),
+            ..Default::default()
+        })
+        .insert(flycamera::FlyCamera::default());
 
     commands
         .spawn()

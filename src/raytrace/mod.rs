@@ -4,16 +4,14 @@ mod tlas;
 use ash::vk;
 
 use bevy::render2::camera::PerspectiveProjection;
-use bevy::render2::view::{ExtractedView, ViewMeta, ViewUniform, ViewUniformOffset};
-use gpu_alloc::Request;
+use bevy::render2::view::{ExtractedView, ViewMeta};
 pub use tlas::Raytraced;
 
 use bevy::prelude::*;
 use bevy::render2::render_graph::{Node, RenderGraph, SlotInfo, SlotType};
-use bevy::render2::{RenderApp, RenderStage};
+use bevy::render2::RenderApp;
 
-use crate::{Allocator, Queues};
-use gpu_alloc_ash::AshMemoryDevice;
+use crate::Queues;
 
 use self::ray_shaders::RayShaders;
 use self::tlas::TlasState;
@@ -79,7 +77,12 @@ impl Plugin for RaytracePlugin {
             ray_pass_driver::RayPassDriverNode::NAME,
             ray_pass_driver::RayPassDriverNode,
         );
-        graph.add_node_edge(bevy::core_pipeline::node::MAIN_PASS_DRIVER, ray_pass_driver::RayPassDriverNode::NAME).unwrap();
+        graph
+            .add_node_edge(
+                bevy::core_pipeline::node::MAIN_PASS_DRIVER,
+                ray_pass_driver::RayPassDriverNode::NAME,
+            )
+            .unwrap();
 
         render_app.add_plugin(tlas::TlasPlugin::default());
         render_app.init_resource::<ray_shaders::RayShaders>();
@@ -125,20 +128,23 @@ impl Node for RaytracingNode {
         render_context: &mut bevy::render2::renderer::RenderContext,
         world: &World,
     ) -> Result<(), bevy::render2::render_graph::NodeRunError> {
-        let raytracing_pipeline_loader = world.get_resource::<ash::extensions::khr::RayTracingPipeline>().unwrap();
+        let raytracing_pipeline_loader = world
+            .get_resource::<ash::extensions::khr::RayTracingPipeline>()
+            .unwrap();
         let device = world.get_resource::<ash::Device>().unwrap();
         let view_meta = world.get_resource::<ViewMeta>().unwrap();
-        let ray_shaders  = world.get_resource::<RayShaders>().unwrap();
-        let tlas_state  = world.get_resource::<TlasState>().unwrap();
+        let ray_shaders = world.get_resource::<RayShaders>().unwrap();
+        let tlas_state = world.get_resource::<TlasState>().unwrap();
         let queues = world.get_resource::<Queues>().unwrap();
         let view = graph.get_input_entity(Self::IN_VIEW).unwrap();
         let view = world.get_entity(view).unwrap();
         let projection = view.get::<PerspectiveProjection>().unwrap();
-        let view =view.get::<ExtractedView>().unwrap();
+        let view = view.get::<ExtractedView>().unwrap();
         let extent: (u32, u32) = (view.width, view.height);
         let view = unsafe {
             let rotation_matrix = Mat3::from_quat(view.transform.rotation).to_cols_array_2d();
-            let mut contants: RaytracingNodeViewConstants = std::mem::MaybeUninit::uninit().assume_init();
+            let mut contants: RaytracingNodeViewConstants =
+                std::mem::MaybeUninit::uninit().assume_init();
             contants.camera_view_col0 = rotation_matrix[0];
             contants.camera_view_col1 = rotation_matrix[1];
             contants.camera_view_col2 = rotation_matrix[2];
@@ -157,9 +163,11 @@ impl Node for RaytracingNode {
                 image_view = texture.raw.raw;
             });
             unsafe {
-                render_target.get_texture().as_hal::<wgpu_hal::api::Vulkan, _>(|texture| {
-                    image = texture.unwrap().raw_handle()
-                });
+                render_target
+                    .get_texture()
+                    .as_hal::<wgpu_hal::api::Vulkan, _>(|texture| {
+                        image = texture.unwrap().raw_handle()
+                    });
             }
             (image, image_view)
         };
@@ -174,9 +182,11 @@ impl Node for RaytracingNode {
                 image_view = texture.raw.raw;
             });
             unsafe {
-                depth_texture_view.get_texture().as_hal::<wgpu_hal::api::Vulkan, _>(|texture| {
-                    image = texture.unwrap().raw_handle()
-                });
+                depth_texture_view
+                    .get_texture()
+                    .as_hal::<wgpu_hal::api::Vulkan, _>(|texture| {
+                        image = texture.unwrap().raw_handle()
+                    });
             }
             (image, image_view)
         };
@@ -185,160 +195,159 @@ impl Node for RaytracingNode {
             device.update_descriptor_sets(
                 &[
                     vk::WriteDescriptorSet::builder()
-                    .dst_set(ray_shaders.target_img_desc_set)
-                    .dst_binding(0)
-                    .descriptor_type(vk::DescriptorType::STORAGE_IMAGE)
-                    .image_info(&[vk::DescriptorImageInfo {
-                        sampler: vk::Sampler::null(),
-                        image_view,
-                        image_layout: vk::ImageLayout::GENERAL, // TODO: ???
-                        },
-                    ])
-                    .build(),
+                        .dst_set(ray_shaders.target_img_desc_set)
+                        .dst_binding(0)
+                        .descriptor_type(vk::DescriptorType::STORAGE_IMAGE)
+                        .image_info(&[vk::DescriptorImageInfo {
+                            sampler: vk::Sampler::null(),
+                            image_view,
+                            image_layout: vk::ImageLayout::GENERAL, // TODO: ???
+                        }])
+                        .build(),
                     vk::WriteDescriptorSet::builder()
-                    .dst_set(ray_shaders.target_img_desc_set)
-                    .dst_binding(1)
-                    .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
-                    .image_info(&[vk::DescriptorImageInfo {
-                        sampler: ray_shaders.depth_sampler,
-                        image_view: depth_image_view,
-                        image_layout: vk::ImageLayout::GENERAL, // TODO: ???
-                        },
-                    ])
-                    .build(),
-                    ],
+                        .dst_set(ray_shaders.target_img_desc_set)
+                        .dst_binding(1)
+                        .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
+                        .image_info(&[vk::DescriptorImageInfo {
+                            sampler: ray_shaders.depth_sampler,
+                            image_view: depth_image_view,
+                            image_layout: vk::ImageLayout::GENERAL, // TODO: ???
+                        }])
+                        .build(),
+                ],
                 &[],
             );
-            render_context.command_encoder.run_raw_command::<wgpu_hal::api::Vulkan, _>(|command_buffer| {
-                let command_buffer = command_buffer.active;
-                assert_ne!(command_buffer, vk::CommandBuffer::null());
+            render_context
+                .command_encoder
+                .run_raw_command::<wgpu_hal::api::Vulkan, _>(|command_buffer| {
+                    let command_buffer = command_buffer.active;
+                    assert_ne!(command_buffer, vk::CommandBuffer::null());
 
-                let desc_sets = [ray_shaders.target_img_desc_set, tlas_state.desc_set];
-                device.cmd_pipeline_barrier(
-                    command_buffer,
-                    vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT,
-                    vk::PipelineStageFlags::RAY_TRACING_SHADER_KHR,
-                    vk::DependencyFlags::BY_REGION,
-                    &[],
-                    &[],
-                    &[
-                        vk::ImageMemoryBarrier::builder()
-                        .src_access_mask(vk::AccessFlags::COLOR_ATTACHMENT_WRITE)
-                        .dst_access_mask(vk::AccessFlags::SHADER_READ)
-                        .old_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
-                        .new_layout(vk::ImageLayout::GENERAL)
-                        .src_queue_family_index(queues.graphics_queue_family)
-                        .dst_queue_family_index(queues.graphics_queue_family)
-                        .image(image)
-                        .subresource_range(vk::ImageSubresourceRange {
-                            aspect_mask: vk::ImageAspectFlags::COLOR,
-                            base_mip_level: 0,
-                            level_count: 1,
-                            base_array_layer: 0,
-                            layer_count: 1,
-                        })
-                        .build(),
-                    ]
-                );
-                device.cmd_pipeline_barrier(
-                    command_buffer,
-                    vk::PipelineStageFlags::LATE_FRAGMENT_TESTS,
-                    vk::PipelineStageFlags::RAY_TRACING_SHADER_KHR,
-                    vk::DependencyFlags::BY_REGION,
-                    &[],
-                    &[],
-                    &[
-                        vk::ImageMemoryBarrier::builder()
-                        .src_access_mask(vk::AccessFlags::DEPTH_STENCIL_ATTACHMENT_WRITE)
-                        .dst_access_mask(vk::AccessFlags::SHADER_READ)
-                        .old_layout(vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
-                        .new_layout(vk::ImageLayout::GENERAL)
-                        .src_queue_family_index(queues.graphics_queue_family)
-                        .dst_queue_family_index(queues.graphics_queue_family)
-                        .image(depth_image)
-                        .subresource_range(vk::ImageSubresourceRange {
-                            aspect_mask: vk::ImageAspectFlags::DEPTH,
-                            base_mip_level: 0,
-                            level_count: 1,
-                            base_array_layer: 0,
-                            layer_count: 1,
-                        })
-                        .build(),
-                    ]
-                );
-                device.cmd_bind_descriptor_sets(
-                    command_buffer,
-                    vk::PipelineBindPoint::RAY_TRACING_KHR,
-                    ray_shaders.pipeline_layout,
-                    0,
-                    &desc_sets,
-                    &[],
-                );
-                device.cmd_push_constants(
-                    command_buffer,
-                    ray_shaders.pipeline_layout,
-                    vk::ShaderStageFlags::RAYGEN_KHR,
-                    0,
-                    &std::slice::from_raw_parts(&view as *const RaytracingNodeViewConstants as *const u8, std::mem::size_of_val(&view))
-                );
-                device.cmd_bind_pipeline(
-                    command_buffer,
-                    vk::PipelineBindPoint::RAY_TRACING_KHR,
-                    ray_shaders.pipeline,
-                );
-                raytracing_pipeline_loader.cmd_trace_rays(
-                    command_buffer,
-                    &ray_shaders.raygen_shader_binding_tables,
-                    &ray_shaders.miss_shader_binding_tables,
-                    &ray_shaders.hit_shader_binding_tables,
-                    &ray_shaders.callable_shader_binding_tables,
-                    extent.0,
-                    extent.1,
-                    1,
-                );
-                device.cmd_pipeline_barrier(
-                    command_buffer,
-                    vk::PipelineStageFlags::RAY_TRACING_SHADER_KHR,
-                    vk::PipelineStageFlags::BOTTOM_OF_PIPE,
-                    vk::DependencyFlags::BY_REGION,
-                    &[],
-                    &[],
-                    &[
-                        vk::ImageMemoryBarrier::builder()
-                        .src_access_mask(vk::AccessFlags::SHADER_WRITE)
-                        .dst_access_mask(vk::AccessFlags::empty())
-                        .old_layout(vk::ImageLayout::GENERAL)
-                        .new_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
-                        .src_queue_family_index(queues.graphics_queue_family)
-                        .dst_queue_family_index(queues.graphics_queue_family)
-                        .image(image)
-                        .subresource_range(vk::ImageSubresourceRange {
-                            aspect_mask: vk::ImageAspectFlags::COLOR,
-                            base_mip_level: 0,
-                            level_count: 1,
-                            base_array_layer: 0,
-                            layer_count: 1,
-                        })
-                        .build(),
-                        vk::ImageMemoryBarrier::builder()
-                        .src_access_mask(vk::AccessFlags::SHADER_WRITE)
-                        .dst_access_mask(vk::AccessFlags::empty())
-                        .old_layout(vk::ImageLayout::GENERAL)
-                        .new_layout(vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
-                        .src_queue_family_index(queues.graphics_queue_family)
-                        .dst_queue_family_index(queues.graphics_queue_family)
-                        .image(depth_image)
-                        .subresource_range(vk::ImageSubresourceRange {
-                            aspect_mask: vk::ImageAspectFlags::DEPTH,
-                            base_mip_level: 0,
-                            level_count: 1,
-                            base_array_layer: 0,
-                            layer_count: 1,
-                        })
-                        .build(),
-                    ]
-                );
-            });
+                    let desc_sets = [ray_shaders.target_img_desc_set, tlas_state.desc_set];
+                    device.cmd_pipeline_barrier(
+                        command_buffer,
+                        vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT,
+                        vk::PipelineStageFlags::RAY_TRACING_SHADER_KHR,
+                        vk::DependencyFlags::BY_REGION,
+                        &[],
+                        &[],
+                        &[vk::ImageMemoryBarrier::builder()
+                            .src_access_mask(vk::AccessFlags::COLOR_ATTACHMENT_WRITE)
+                            .dst_access_mask(vk::AccessFlags::SHADER_READ)
+                            .old_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
+                            .new_layout(vk::ImageLayout::GENERAL)
+                            .src_queue_family_index(queues.graphics_queue_family)
+                            .dst_queue_family_index(queues.graphics_queue_family)
+                            .image(image)
+                            .subresource_range(vk::ImageSubresourceRange {
+                                aspect_mask: vk::ImageAspectFlags::COLOR,
+                                base_mip_level: 0,
+                                level_count: 1,
+                                base_array_layer: 0,
+                                layer_count: 1,
+                            })
+                            .build()],
+                    );
+                    device.cmd_pipeline_barrier(
+                        command_buffer,
+                        vk::PipelineStageFlags::LATE_FRAGMENT_TESTS,
+                        vk::PipelineStageFlags::RAY_TRACING_SHADER_KHR,
+                        vk::DependencyFlags::BY_REGION,
+                        &[],
+                        &[],
+                        &[vk::ImageMemoryBarrier::builder()
+                            .src_access_mask(vk::AccessFlags::DEPTH_STENCIL_ATTACHMENT_WRITE)
+                            .dst_access_mask(vk::AccessFlags::SHADER_READ)
+                            .old_layout(vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
+                            .new_layout(vk::ImageLayout::GENERAL)
+                            .src_queue_family_index(queues.graphics_queue_family)
+                            .dst_queue_family_index(queues.graphics_queue_family)
+                            .image(depth_image)
+                            .subresource_range(vk::ImageSubresourceRange {
+                                aspect_mask: vk::ImageAspectFlags::DEPTH,
+                                base_mip_level: 0,
+                                level_count: 1,
+                                base_array_layer: 0,
+                                layer_count: 1,
+                            })
+                            .build()],
+                    );
+                    device.cmd_bind_descriptor_sets(
+                        command_buffer,
+                        vk::PipelineBindPoint::RAY_TRACING_KHR,
+                        ray_shaders.pipeline_layout,
+                        0,
+                        &desc_sets,
+                        &[],
+                    );
+                    device.cmd_push_constants(
+                        command_buffer,
+                        ray_shaders.pipeline_layout,
+                        vk::ShaderStageFlags::RAYGEN_KHR,
+                        0,
+                        &std::slice::from_raw_parts(
+                            &view as *const RaytracingNodeViewConstants as *const u8,
+                            std::mem::size_of_val(&view),
+                        ),
+                    );
+                    device.cmd_bind_pipeline(
+                        command_buffer,
+                        vk::PipelineBindPoint::RAY_TRACING_KHR,
+                        ray_shaders.pipeline,
+                    );
+                    raytracing_pipeline_loader.cmd_trace_rays(
+                        command_buffer,
+                        &ray_shaders.raygen_shader_binding_tables,
+                        &ray_shaders.miss_shader_binding_tables,
+                        &ray_shaders.hit_shader_binding_tables,
+                        &ray_shaders.callable_shader_binding_tables,
+                        extent.0,
+                        extent.1,
+                        1,
+                    );
+                    device.cmd_pipeline_barrier(
+                        command_buffer,
+                        vk::PipelineStageFlags::RAY_TRACING_SHADER_KHR,
+                        vk::PipelineStageFlags::BOTTOM_OF_PIPE,
+                        vk::DependencyFlags::BY_REGION,
+                        &[],
+                        &[],
+                        &[
+                            vk::ImageMemoryBarrier::builder()
+                                .src_access_mask(vk::AccessFlags::SHADER_WRITE)
+                                .dst_access_mask(vk::AccessFlags::empty())
+                                .old_layout(vk::ImageLayout::GENERAL)
+                                .new_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
+                                .src_queue_family_index(queues.graphics_queue_family)
+                                .dst_queue_family_index(queues.graphics_queue_family)
+                                .image(image)
+                                .subresource_range(vk::ImageSubresourceRange {
+                                    aspect_mask: vk::ImageAspectFlags::COLOR,
+                                    base_mip_level: 0,
+                                    level_count: 1,
+                                    base_array_layer: 0,
+                                    layer_count: 1,
+                                })
+                                .build(),
+                            vk::ImageMemoryBarrier::builder()
+                                .src_access_mask(vk::AccessFlags::SHADER_WRITE)
+                                .dst_access_mask(vk::AccessFlags::empty())
+                                .old_layout(vk::ImageLayout::GENERAL)
+                                .new_layout(vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
+                                .src_queue_family_index(queues.graphics_queue_family)
+                                .dst_queue_family_index(queues.graphics_queue_family)
+                                .image(depth_image)
+                                .subresource_range(vk::ImageSubresourceRange {
+                                    aspect_mask: vk::ImageAspectFlags::DEPTH,
+                                    base_mip_level: 0,
+                                    level_count: 1,
+                                    base_array_layer: 0,
+                                    layer_count: 1,
+                                })
+                                .build(),
+                        ],
+                    );
+                });
         }
         Ok(())
     }

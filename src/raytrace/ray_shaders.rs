@@ -37,27 +37,32 @@ impl FromWorld for RayShaders {
             .get_mut(world);
 
         unsafe {
-            let depth_sampler = device.create_sampler(&vk::SamplerCreateInfo::builder()
-            .mag_filter(vk::Filter::NEAREST)
-            .min_filter(vk::Filter::NEAREST)
-            .mipmap_mode(vk::SamplerMipmapMode::NEAREST)
-            .build(), None).unwrap();
+            let depth_sampler = device
+                .create_sampler(
+                    &vk::SamplerCreateInfo::builder()
+                        .mag_filter(vk::Filter::NEAREST)
+                        .min_filter(vk::Filter::NEAREST)
+                        .mipmap_mode(vk::SamplerMipmapMode::NEAREST)
+                        .build(),
+                    None,
+                )
+                .unwrap();
             let target_img_desc_layout = device
                 .create_descriptor_set_layout(
                     &vk::DescriptorSetLayoutCreateInfo::builder()
                         .bindings(&[
                             vk::DescriptorSetLayoutBinding::builder()
-                            .binding(0)
-                            .descriptor_type(vk::DescriptorType::STORAGE_IMAGE)
-                            .descriptor_count(1)
-                            .stage_flags(vk::ShaderStageFlags::RAYGEN_KHR)
-                            .build(),
+                                .binding(0)
+                                .descriptor_type(vk::DescriptorType::STORAGE_IMAGE)
+                                .descriptor_count(1)
+                                .stage_flags(vk::ShaderStageFlags::RAYGEN_KHR)
+                                .build(),
                             vk::DescriptorSetLayoutBinding::builder()
-                            .binding(1)
-                            .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
-                            .descriptor_count(1)
-                            .stage_flags(vk::ShaderStageFlags::RAYGEN_KHR)
-                            .build()
+                                .binding(1)
+                                .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
+                                .descriptor_count(1)
+                                .stage_flags(vk::ShaderStageFlags::RAYGEN_KHR)
+                                .build(),
                         ])
                         .build(),
                     None,
@@ -67,23 +72,22 @@ impl FromWorld for RayShaders {
             let result = device.fp_v1_0().allocate_descriptor_sets(
                 device.handle(),
                 &vk::DescriptorSetAllocateInfo::builder()
-                .descriptor_pool(*desc_pool)
-                .set_layouts(&[target_img_desc_layout])
-                .build(),
-                &mut target_img_desc_set);
+                    .descriptor_pool(*desc_pool)
+                    .set_layouts(&[target_img_desc_layout])
+                    .build(),
+                &mut target_img_desc_set,
+            );
             assert_eq!(result, vk::Result::SUCCESS);
 
             let pipeline_layout = device
                 .create_pipeline_layout(
                     &vk::PipelineLayoutCreateInfo::builder()
                         .set_layouts(&[target_img_desc_layout, tlas_state.desc_set_layout])
-                        .push_constant_ranges(&[
-                            vk::PushConstantRange {
-                                stage_flags: vk::ShaderStageFlags::RAYGEN_KHR,
-                                offset: 0,
-                                size: std::mem::size_of::<RaytracingNodeViewConstants>() as u32
-                            }
-                        ])
+                        .push_constant_ranges(&[vk::PushConstantRange {
+                            stage_flags: vk::ShaderStageFlags::RAYGEN_KHR,
+                            offset: 0,
+                            size: std::mem::size_of::<RaytracingNodeViewConstants>() as u32,
+                        }])
                         .build(),
                     None,
                 )
