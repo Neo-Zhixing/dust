@@ -20,6 +20,7 @@ pub struct RayShaders {
     pub miss_shader_binding_tables: vk::StridedDeviceAddressRegionKHR,
     pub hit_shader_binding_tables: vk::StridedDeviceAddressRegionKHR,
     pub callable_shader_binding_tables: vk::StridedDeviceAddressRegionKHR,
+    pub depth_sampler: vk::Sampler,
 }
 
 impl FromWorld for RayShaders {
@@ -36,15 +37,28 @@ impl FromWorld for RayShaders {
             .get_mut(world);
 
         unsafe {
+            let depth_sampler = device.create_sampler(&vk::SamplerCreateInfo::builder()
+            .mag_filter(vk::Filter::NEAREST)
+            .min_filter(vk::Filter::NEAREST)
+            .mipmap_mode(vk::SamplerMipmapMode::NEAREST)
+            .build(), None).unwrap();
             let target_img_desc_layout = device
                 .create_descriptor_set_layout(
                     &vk::DescriptorSetLayoutCreateInfo::builder()
-                        .bindings(&[vk::DescriptorSetLayoutBinding::builder()
+                        .bindings(&[
+                            vk::DescriptorSetLayoutBinding::builder()
                             .binding(0)
                             .descriptor_type(vk::DescriptorType::STORAGE_IMAGE)
                             .descriptor_count(1)
                             .stage_flags(vk::ShaderStageFlags::RAYGEN_KHR)
-                            .build()])
+                            .build(),
+                            vk::DescriptorSetLayoutBinding::builder()
+                            .binding(1)
+                            .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
+                            .descriptor_count(1)
+                            .stage_flags(vk::ShaderStageFlags::RAYGEN_KHR)
+                            .build()
+                        ])
                         .build(),
                     None,
                 )
@@ -355,6 +369,7 @@ impl FromWorld for RayShaders {
                     size: sbt_entry_layout.pad_to_align().size() as u64,
                 },
                 callable_shader_binding_tables: vk::StridedDeviceAddressRegionKHR::default(),
+                depth_sampler,
             }
         }
     }

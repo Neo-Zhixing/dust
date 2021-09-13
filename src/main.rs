@@ -32,7 +32,7 @@ fn setup(
             base_color: Color::PINK,
             ..Default::default()
         }),
-        transform: Transform::from_xyz(0.0, 0.0, 0.0),
+        transform: Transform::from_xyz(0.5, 0.5, 0.5),
         ..Default::default()
     });
 
@@ -70,10 +70,10 @@ fn setup(
     commands
         .spawn()
         .insert(Raytraced {
-            aabb_extent: bevy::math::Vec3::new(1.0, 1.0, 10.0),
+            aabb_extent: bevy::math::Vec3::new(1.0, 1.0, 1.0),
         })
         .insert(GlobalTransform::default())
-        .insert(Transform::default());
+        .insert(Transform::from_xyz(0.0, 1.0, 0.0));
     /*
     commands
         .spawn()

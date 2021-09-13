@@ -3,10 +3,21 @@
 
 #include "shared.glsl"
 
+vec2 intersectAABB(vec3 origin, vec3 dir, vec4 box) {
+    vec3 box_min = box.xyz;
+    vec3 box_max = box_min + box.w;
+    vec3 tMin = (box_min - origin) / dir;
+    vec3 tMax = (box_max - origin) / dir;
+    vec3 t1 = min(tMin, tMax);
+    vec3 t2 = max(tMin, tMax);
+    float t_min = max(max(t1.x, t1.y), t1.z);
+    float t_max = min(min(t2.x, t2.y), t2.z);
+    return vec2(t_min, t_max);
+}
+
 void main()
 {	
-	vec3 aabb_min = gl_ObjectToWorldEXT * vec4(0, 0, 0, 1);
-	vec3 aabb_max = gl_ObjectToWorldEXT * vec4(1, 1, 1, 1);
 
-    reportIntersectionEXT(10.0, 0);
+	vec2 intersection = intersectAABB(gl_WorldRayOriginEXT, gl_WorldRayDirectionEXT,  vec4(0,0,0,1));
+    reportIntersectionEXT(intersection.x, 0);
 }

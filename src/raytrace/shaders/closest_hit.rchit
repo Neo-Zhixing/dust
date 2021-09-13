@@ -6,5 +6,6 @@
 layout(location = 0) rayPayloadInEXT RayPayload payload;
 
 void main() {
-    payload.color = vec3(0.0, 0.0, 1.0);
+    payload.color = vec3(1.0, 1.0, 1.0);
+    payload.t = gl_RayTmaxEXT;
 }

@@ -5,13 +5,15 @@ use ash::vk;
 
 use bevy::render2::camera::PerspectiveProjection;
 use bevy::render2::view::{ExtractedView, ViewMeta, ViewUniform, ViewUniformOffset};
+use gpu_alloc::Request;
 pub use tlas::Raytraced;
 
 use bevy::prelude::*;
 use bevy::render2::render_graph::{Node, RenderGraph, SlotInfo, SlotType};
-use bevy::render2::RenderApp;
+use bevy::render2::{RenderApp, RenderStage};
 
-use crate::Queues;
+use crate::{Allocator, Queues};
+use gpu_alloc_ash::AshMemoryDevice;
 
 use self::ray_shaders::RayShaders;
 use self::tlas::TlasState;
@@ -134,7 +136,6 @@ impl Node for RaytracingNode {
         let projection = view.get::<PerspectiveProjection>().unwrap();
         let view =view.get::<ExtractedView>().unwrap();
         let extent: (u32, u32) = (view.width, view.height);
-        println!("{:?}", view.transform);
         let view = unsafe {
             let rotation_matrix = Mat3::from_quat(view.transform.rotation).to_cols_array_2d();
             let mut contants: RaytracingNodeViewConstants = std::mem::MaybeUninit::uninit().assume_init();
@@ -145,24 +146,45 @@ impl Node for RaytracingNode {
             contants.tan_half_fov = (projection.fov / 2.0).tan(); // TODO
             contants
         };
-
-        let render_target = graph.get_input_texture(Self::IN_COLOR_ATTACHMENT).unwrap();
-        let mut image_view = vk::ImageView::null();
-        let mut image = vk::Image::null();
-        render_target.as_hal::<wgpu_hal::api::Vulkan, _>(|texture| {
-            let texture = texture.unwrap();
-            assert_eq!(extent.0, texture.extent.width);
-            assert_eq!(extent.1, texture.extent.height);
-            image_view = texture.raw.raw;
-        });
-        unsafe {
-            render_target.get_texture().as_hal::<wgpu_hal::api::Vulkan, _>(|texture| {
-                image = texture.unwrap().raw_handle()
+        let (image, image_view) = {
+            let render_target = graph.get_input_texture(Self::IN_COLOR_ATTACHMENT).unwrap();
+            let mut image_view = vk::ImageView::null();
+            let mut image = vk::Image::null();
+            render_target.as_hal::<wgpu_hal::api::Vulkan, _>(|texture| {
+                let texture = texture.unwrap();
+                assert_eq!(extent.0, texture.extent.width);
+                assert_eq!(extent.1, texture.extent.height);
+                image_view = texture.raw.raw;
             });
-        }
+            unsafe {
+                render_target.get_texture().as_hal::<wgpu_hal::api::Vulkan, _>(|texture| {
+                    image = texture.unwrap().raw_handle()
+                });
+            }
+            (image, image_view)
+        };
+        let (depth_image, depth_image_view) = {
+            let depth_texture_view = graph.get_input_texture(Self::IN_DEPTH).unwrap();
+            let mut image_view = vk::ImageView::null();
+            let mut image = vk::Image::null();
+            depth_texture_view.as_hal::<wgpu_hal::api::Vulkan, _>(|texture| {
+                let texture = texture.unwrap();
+                assert_eq!(extent.0, texture.extent.width);
+                assert_eq!(extent.1, texture.extent.height);
+                image_view = texture.raw.raw;
+            });
+            unsafe {
+                depth_texture_view.get_texture().as_hal::<wgpu_hal::api::Vulkan, _>(|texture| {
+                    image = texture.unwrap().raw_handle()
+                });
+            }
+            (image, image_view)
+        };
+
         unsafe {
             device.update_descriptor_sets(
-                &[vk::WriteDescriptorSet::builder()
+                &[
+                    vk::WriteDescriptorSet::builder()
                     .dst_set(ray_shaders.target_img_desc_set)
                     .dst_binding(0)
                     .descriptor_type(vk::DescriptorType::STORAGE_IMAGE)
@@ -170,8 +192,21 @@ impl Node for RaytracingNode {
                         sampler: vk::Sampler::null(),
                         image_view,
                         image_layout: vk::ImageLayout::GENERAL, // TODO: ???
-                    }])
-                    .build()],
+                        },
+                    ])
+                    .build(),
+                    vk::WriteDescriptorSet::builder()
+                    .dst_set(ray_shaders.target_img_desc_set)
+                    .dst_binding(1)
+                    .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
+                    .image_info(&[vk::DescriptorImageInfo {
+                        sampler: ray_shaders.depth_sampler,
+                        image_view: depth_image_view,
+                        image_layout: vk::ImageLayout::GENERAL, // TODO: ???
+                        },
+                    ])
+                    .build(),
+                    ],
                 &[],
             );
             render_context.command_encoder.run_raw_command::<wgpu_hal::api::Vulkan, _>(|command_buffer| {
@@ -202,7 +237,33 @@ impl Node for RaytracingNode {
                             base_array_layer: 0,
                             layer_count: 1,
                         })
-                        .build()
+                        .build(),
+                    ]
+                );
+                device.cmd_pipeline_barrier(
+                    command_buffer,
+                    vk::PipelineStageFlags::LATE_FRAGMENT_TESTS,
+                    vk::PipelineStageFlags::RAY_TRACING_SHADER_KHR,
+                    vk::DependencyFlags::BY_REGION,
+                    &[],
+                    &[],
+                    &[
+                        vk::ImageMemoryBarrier::builder()
+                        .src_access_mask(vk::AccessFlags::DEPTH_STENCIL_ATTACHMENT_WRITE)
+                        .dst_access_mask(vk::AccessFlags::SHADER_READ)
+                        .old_layout(vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
+                        .new_layout(vk::ImageLayout::GENERAL)
+                        .src_queue_family_index(queues.graphics_queue_family)
+                        .dst_queue_family_index(queues.graphics_queue_family)
+                        .image(depth_image)
+                        .subresource_range(vk::ImageSubresourceRange {
+                            aspect_mask: vk::ImageAspectFlags::DEPTH,
+                            base_mip_level: 0,
+                            level_count: 1,
+                            base_array_layer: 0,
+                            layer_count: 1,
+                        })
+                        .build(),
                     ]
                 );
                 device.cmd_bind_descriptor_sets(
@@ -258,7 +319,23 @@ impl Node for RaytracingNode {
                             base_array_layer: 0,
                             layer_count: 1,
                         })
-                        .build()
+                        .build(),
+                        vk::ImageMemoryBarrier::builder()
+                        .src_access_mask(vk::AccessFlags::SHADER_WRITE)
+                        .dst_access_mask(vk::AccessFlags::empty())
+                        .old_layout(vk::ImageLayout::GENERAL)
+                        .new_layout(vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
+                        .src_queue_family_index(queues.graphics_queue_family)
+                        .dst_queue_family_index(queues.graphics_queue_family)
+                        .image(depth_image)
+                        .subresource_range(vk::ImageSubresourceRange {
+                            aspect_mask: vk::ImageAspectFlags::DEPTH,
+                            base_mip_level: 0,
+                            level_count: 1,
+                            base_array_layer: 0,
+                            layer_count: 1,
+                        })
+                        .build(),
                     ]
                 );
             });

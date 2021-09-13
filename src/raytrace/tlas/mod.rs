@@ -398,7 +398,7 @@ fn tlas_update(
             let mat = mat.transpose().to_cols_array();
             unsafe {
                 let mut instance = vk::AccelerationStructureInstanceKHR {
-                    transform: vk::TransformMatrixKHR { matrix: [0.0; 12] },
+                    transform: vk::TransformMatrixKHR { matrix: MaybeUninit::uninit().assume_init() },
                     instance_custom_index_and_mask: u32::MAX,
                     instance_shader_binding_table_record_offset_and_flags: 0,
                     acceleration_structure_reference: vk::AccelerationStructureReferenceKHR {
