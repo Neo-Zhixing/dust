@@ -920,6 +920,7 @@ dependencies = [
  "ash",
  "ash-window",
  "bevy",
+ "crossbeam",
  "gpu-alloc",
  "gpu-alloc-ash",
  "shaderc",

@@ -405,7 +405,7 @@ impl DustPlugin {
                     .physical_device_properties
                     .limits
                     .max_memory_allocation_count,
-                max_memory_allocation_size: u64::MAX,
+                max_memory_allocation_size: u64::MAX, // TODO
                 non_coherent_atom_size: device_info
                     .physical_device_properties
                     .limits

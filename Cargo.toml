@@ -26,6 +26,7 @@ gpu-alloc-ash = "0.2.0"
 wgpu = { path = "../wgpu/wgpu", features = ["spirv"] }
 wgpu-hal = { path = "../wgpu/wgpu-hal" }
 wgpu-types = { path = "../wgpu/wgpu-types" }
+crossbeam = "0.8"
 
 [build-dependencies]
 shaderc = "0.7"
