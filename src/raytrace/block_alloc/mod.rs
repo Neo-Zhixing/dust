@@ -36,21 +36,14 @@ impl Drop for BlockAllocation {
 
 pub trait BlockAllocator: Send + Sync {
     // Allocate a block. Returns the host pointer to the block, and an allocation token which needs to be returned.
-    unsafe fn allocate_block(
-        &self,
-        device: &ash::Device,
-    ) -> Result<(*mut u8, BlockAllocation), AllocError>;
-    unsafe fn deallocate_block(&self, device: &ash::Device, block: BlockAllocation);
+    unsafe fn allocate_block(&self) -> Result<(*mut u8, BlockAllocation), AllocError>;
+    unsafe fn deallocate_block(&self, block: BlockAllocation);
 
     // Flush all host writes to the device.
-    unsafe fn flush(
-        &self,
-        device: &ash::Device,
-        ranges: &mut dyn Iterator<Item = (&BlockAllocation, Range<u32>)>,
-    );
+    unsafe fn flush(&self, ranges: &mut dyn Iterator<Item = (&BlockAllocation, Range<u32>)>);
 
     // Returns false if the async copy is still busy.
-    fn can_flush(&self, device: &ash::Device) -> bool;
+    fn can_flush(&self) -> bool;
 }
 
 pub struct AllocatorCreateInfo {
