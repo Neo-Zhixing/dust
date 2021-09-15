@@ -1,3 +1,4 @@
+mod arena_alloc;
 mod block_alloc;
 mod ray_pass_driver;
 mod ray_shaders;
