@@ -1,5 +1,4 @@
-use super::{AllocError, BlockAllocation, BlockAllocator};
-use crate::device_info::DeviceInfo;
+use super::{AllocError, AllocatorCreateInfo, BlockAllocation, BlockAllocator};
 use ash::vk;
 use crossbeam::queue::SegQueue;
 use std::ops::Range;
@@ -31,19 +30,11 @@ pub struct DiscreteBlockAllocator {
 unsafe impl Send for DiscreteBlockAllocator {}
 unsafe impl Sync for DiscreteBlockAllocator {}
 
-pub struct DiscreteBlockAllocatorCreateInfo {
-    bind_transfer_queue: vk::Queue,
-    bind_transfer_queue_family: u32,
-    graphics_queue_family: u32,
-    block_size: u64,
-    max_storage_buffer_size: u64,
-}
-
 impl DiscreteBlockAllocator {
     pub unsafe fn new(
         device: &ash::Device,
         memory_properties: &vk::PhysicalDeviceMemoryProperties,
-        create_info: &DiscreteBlockAllocatorCreateInfo,
+        create_info: &AllocatorCreateInfo,
     ) -> Self {
         let queue_family_indices = [
             create_info.graphics_queue_family,
@@ -247,6 +238,7 @@ impl BlockAllocator for DiscreteBlockAllocator {
             .unwrap();
 
         for (block_allocation, range) in ranges {
+            // TODO: revisit for effiency improvements.
             let block = block_allocation.0 as *const DiscreteBlock;
             let block = &*block;
             let location = block.offset * self.block_size as u64 + range.start as u64;

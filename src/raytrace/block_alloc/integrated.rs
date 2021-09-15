@@ -1,7 +1,6 @@
-use crate::device_info::DeviceInfo;
 use ash::vk;
 
-use super::{AllocError, BlockAllocation, BlockAllocator};
+use super::{AllocError, AllocatorCreateInfo, BlockAllocation, BlockAllocator};
 use crossbeam::queue::SegQueue;
 use std::ops::Range;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -22,20 +21,19 @@ unsafe impl Sync for IntegratedBlockAllocator {}
 impl IntegratedBlockAllocator {
     pub unsafe fn new(
         device: &ash::Device,
-        bind_transfer_queue: vk::Queue,
-        bind_transfer_queue_family: u32,
-        graphics_queue_family: u32,
-        block_size: u64,
-        max_storage_buffer_size: u64,
         memory_properties: &vk::PhysicalDeviceMemoryProperties,
+        create_info: &AllocatorCreateInfo,
     ) -> Self {
-        let queue_family_indices = [graphics_queue_family, bind_transfer_queue_family];
+        let queue_family_indices = [
+            create_info.graphics_queue_family,
+            create_info.bind_transfer_queue_family,
+        ];
         let mut buffer_create_info = vk::BufferCreateInfo::builder()
-            .size(max_storage_buffer_size)
+            .size(create_info.max_storage_buffer_size)
             .usage(vk::BufferUsageFlags::STORAGE_BUFFER)
             .flags(vk::BufferCreateFlags::SPARSE_BINDING | vk::BufferCreateFlags::SPARSE_RESIDENCY);
 
-        if graphics_queue_family == bind_transfer_queue_family {
+        if create_info.graphics_queue_family == create_info.bind_transfer_queue_family {
             buffer_create_info = buffer_create_info.sharing_mode(vk::SharingMode::EXCLUSIVE);
         } else {
             buffer_create_info = buffer_create_info
@@ -49,12 +47,12 @@ impl IntegratedBlockAllocator {
         let requirements = device.get_buffer_memory_requirements(device_buffer);
         let memtype = select_integrated_memtype(memory_properties, &requirements);
         Self {
-            bind_transfer_queue,
+            bind_transfer_queue: create_info.bind_transfer_queue,
             memtype,
             buffer: device_buffer,
             current_offset: AtomicU64::new(0),
             free_offsets: SegQueue::new(),
-            block_size,
+            block_size: create_info.block_size,
         }
     }
 }
