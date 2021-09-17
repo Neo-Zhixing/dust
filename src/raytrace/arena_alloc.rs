@@ -54,7 +54,7 @@ struct FreeSlot {
 
 union ArenaSlot<T: ArenaAllocated> {
     occupied: ManuallyDrop<T>,
-    free: ManuallyDrop<FreeSlot>,
+    free: FreeSlot,
 }
 
 pub trait ArenaAllocated: Sized + Default {}
@@ -66,7 +66,7 @@ pub struct ArenaAllocator<T: ArenaAllocated> {
     newspace_top: Handle, // new space to be allocated
     size: u32,            // number of allocated slots
     num_segments: u32,    // number of allocated segments
-    capacity: u32,        // number of available slots
+    num_blocks: u32,      // number of blocks allocated from block_allocator
 }
 
 // ArenaAllocator contains NunNull which makes it !Send and !Sync.
@@ -87,19 +87,36 @@ impl<T: ArenaAllocated> ArenaAllocator<T> {
             newspace_top: Handle::none(),
             size: 0,
             num_segments: 0,
-            capacity: 0,
+            num_blocks: 0,
         }
     }
+    #[cfg(test)]
+    pub fn potato() -> Self {
+        use super::block_alloc::SystemBlockAllocator;
+        Self {
+            block_allocator: Arc::new(SystemBlockAllocator::new(
+                NUM_SLOTS_IN_BLOCK as usize * std::mem::size_of::<ArenaSlot<T>>(),
+            )),
+            chunks: vec![],
+            freelist_heads: [Handle::none(); 9],
+            // Space pointed by this is guaranteed to have free space > 8
+            newspace_top: Handle::none(),
+            size: 0,
+            num_segments: 0,
+            num_blocks: 0,
+        }
+    }
+
     unsafe fn alloc_block(&mut self) -> Handle {
         let chunk_index = self.chunks.len() as u32;
         let (chunk, allocation) = self.block_allocator.allocate_block().unwrap();
         self.chunks
             .push((NonNull::new_unchecked(chunk as _), allocation));
-        self.capacity += NUM_SLOTS_IN_BLOCK;
+        self.num_blocks += 1;
         Handle::from_index(chunk_index, 0)
     }
     pub unsafe fn alloc(&mut self, len: u32) -> Handle {
-        assert!(len <= 8, "Only supports block size between 1-8!");
+        assert!(0 < len && len <= 9, "Only supports block size between 1-8!");
         self.size += len;
         self.num_segments += 1;
 
@@ -121,7 +138,7 @@ impl<T: ArenaAllocated> ArenaAllocator<T> {
                 let remaining_space = NUM_SLOTS_IN_BLOCK - slot_index - len;
 
                 let new_handle = Handle::from_index(chunk_index, slot_index + len);
-                if remaining_space > 8 {
+                if remaining_space > 9 {
                     self.newspace_top = new_handle;
                 } else {
                     if remaining_space > 0 {
@@ -152,19 +169,21 @@ impl<T: ArenaAllocated> ArenaAllocator<T> {
         handle
     }
     pub unsafe fn free(&mut self, handle: Handle, block_size: u8) {
+        debug_assert!(0 < block_size && block_size <= 9);
         self.freelist_push(block_size, handle);
         self.size -= block_size as u32;
         self.num_segments -= 1;
     }
     unsafe fn freelist_push(&mut self, n: u8, handle: Handle) {
-        debug_assert!(n <= 8);
-        self.get_slot_mut(handle).free.next = self.freelist_heads[n as usize];
-        self.freelist_heads[n as usize] = handle;
+        debug_assert!(0 < n && n <= 9);
+        self.get_slot_mut(handle).free.next = self.freelist_heads[(n - 1) as usize];
+        self.freelist_heads[(n - 1) as usize] = handle;
     }
     unsafe fn freelist_pop(&mut self, n: u8) -> Handle {
-        let sized_head = self.freelist_heads[n as usize];
+        debug_assert!(0 < n && n <= 9);
+        let sized_head = self.freelist_heads[(n - 1) as usize];
         if !sized_head.is_none() {
-            self.freelist_heads[n as usize] = self.get_slot(sized_head).free.next;
+            self.freelist_heads[(n - 1) as usize] = self.get_slot(sized_head).free.next;
         }
         sized_head
     }
@@ -198,6 +217,60 @@ impl<T: ArenaAllocated> ArenaAllocator<T> {
         unsafe {
             let slot = self.get_slot_mut(index);
             &mut slot.occupied
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use std::mem::size_of;
+
+    impl ArenaAllocated for u128 {}
+
+    #[test]
+    fn test_alloc() {
+        let mut arena: ArenaAllocator<u128> = ArenaAllocator::potato();
+        unsafe {
+            // Allocate until we have 9 slots left
+            for i in 0..NUM_SLOTS_IN_BLOCK - 9 {
+                let handle = arena.alloc(1);
+                assert_eq!(handle.get_slot_num(), i);
+                assert_eq!(handle.get_chunk_num(), 0);
+            }
+            // At this point there shouldn't be any extra allocations
+            assert_eq!(arena.num_blocks, 1);
+
+            // Allocate one more
+            let handle = arena.alloc(1);
+
+            // This new slot should be in a new chunk
+            assert_eq!(handle.get_slot_num(), 0);
+            assert_eq!(handle.get_chunk_num(), 1);
+            // A new chunk was allocated
+            assert_eq!(arena.num_blocks, 2);
+
+            // The remaining 9 slot was put into the freelist
+            let handle = arena.alloc(9);
+            assert_eq!(handle.get_slot_num(), NUM_SLOTS_IN_BLOCK - 9);
+            assert_eq!(handle.get_chunk_num(), 0);
+        }
+    }
+
+    #[test]
+    fn test_free() {
+        let mut arena: ArenaAllocator<u128> = ArenaAllocator::potato();
+        unsafe {
+            let handles: Vec<Handle> = (0..8).map(|_| arena.alloc(4)).collect();
+            for handle in handles.iter().rev() {
+                unsafe { arena.free(*handle, 4) };
+            }
+            assert_eq!(arena.alloc(1), Handle(8 * 4));
+            for handle in handles.iter() {
+                let new_handle = arena.alloc(4);
+                assert_eq!(*handle, new_handle);
+            }
         }
     }
 }

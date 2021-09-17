@@ -1,8 +1,14 @@
 mod discrete;
 mod integrated;
 
+#[cfg(test)]
+mod system;
+
 pub use discrete::DiscreteBlockAllocator;
 pub use integrated::IntegratedBlockAllocator;
+
+#[cfg(test)]
+pub use system::SystemBlockAllocator;
 
 use ash::vk;
 use std::ops::Range;
@@ -28,11 +34,6 @@ impl From<vk::Result> for AllocError {
 }
 
 pub struct BlockAllocation(pub u64);
-impl Drop for BlockAllocation {
-    fn drop(&mut self) {
-        panic!("BlockAllocation must be returned to the BlockAllocator!")
-    }
-}
 
 pub trait BlockAllocator: Send + Sync {
     // Allocate a block. Returns the host pointer to the block, and an allocation token which needs to be returned.

@@ -1,5 +1,8 @@
 #![feature(maybe_uninit_uninit_array)]
 #![feature(alloc_layout_extra)]
+#![feature(untagged_unions)]
+#![feature(allocator_api)]
+#![feature(slice_ptr_get)]
 
 mod device_info;
 mod queues;
