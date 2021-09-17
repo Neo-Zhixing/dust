@@ -219,6 +219,11 @@ impl<T: ArenaAllocated> ArenaAllocator<T> {
             &mut slot.occupied
         }
     }
+
+    #[inline]
+    pub fn get_size(&self) -> u32 {
+        self.size
+    }
 }
 
 #[cfg(test)]

@@ -2,8 +2,6 @@ mod grid;
 
 use std::default;
 
-use self::grid::GridAccessor;
-
 use super::arena_alloc::{ArenaAllocated, ArenaAllocator, Handle};
 
 struct Header {
@@ -48,7 +46,7 @@ impl Header {
 struct Body {
     handle: Handle,
 }
-union Slot {
+pub union Slot {
     header: Header,
     body: Body,
 }
@@ -64,12 +62,14 @@ pub struct Svdag {
 }
 
 impl Svdag {
-    // Access a certain frame of the DAG in a uniform grid of side length 2^size
-    pub fn get_grid_accessor(&self, size: u8, frame: usize) -> GridAccessor {
-        GridAccessor {
-            dag: self,
-            size,
-            root: self.roots[frame],
+    pub fn new(arena: ArenaAllocator<Slot>, num_roots: u32) -> Self {
+        Svdag {
+            arena,
+            roots: vec![Handle::none(); num_roots as usize],
         }
+    }
+    #[cfg(test)]
+    pub fn potato() -> Self {
+        Self::new(ArenaAllocator::<Slot>::potato(), 1)
     }
 }

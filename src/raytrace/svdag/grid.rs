@@ -204,3 +204,37 @@ impl<'a> GridAccessorMut<'a> {
         new_handle
     }
 }
+
+impl Svdag {
+    // Access a certain frame of the DAG in a uniform grid of side length 2^size
+    pub fn get_grid_accessor(&self, size: u8, frame: usize) -> GridAccessor {
+        GridAccessor {
+            dag: self,
+            size,
+            root: self.roots[frame],
+        }
+    }
+    pub fn get_grid_accessor_mut(&mut self, size: u8, frame: usize) -> GridAccessorMut {
+        let root = self.roots[frame];
+        GridAccessorMut {
+            dag: self,
+            size,
+            root,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Svdag;
+
+    fn test_set() {
+        let mut dag = Svdag::potato();
+        let mut grid = dag.get_grid_accessor_mut(16, 0);
+
+        assert!(!grid.get(0, 0, 0));
+        grid.set(0, 0, 0, true);
+        assert!(grid.get(0, 0, 0));
+        assert_eq!(grid.dag.arena.get_size(), 3);
+    }
+}
