@@ -22,6 +22,7 @@ pub type Allocator = gpu_alloc::GpuAllocator<vk::DeviceMemory>;
 pub type MemoryBlock = gpu_alloc::MemoryBlock<vk::DeviceMemory>;
 pub use queues::Queues;
 pub use raytrace::Raytraced;
+pub use raytrace::VoxelModel;
 
 #[derive(Default)]
 pub struct DustPlugin;

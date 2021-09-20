@@ -1,8 +1,9 @@
 mod grid;
 
-use std::default;
+use std::sync::Arc;
 
 use super::arena_alloc::{ArenaAllocated, ArenaAllocator, Handle};
+use super::block_alloc::BlockAllocator;
 
 struct Header {
     child_mask: u8,
@@ -56,13 +57,15 @@ impl Default for Slot {
     }
 }
 impl ArenaAllocated for Slot {}
+
 pub struct Svdag {
     arena: ArenaAllocator<Slot>,
     roots: Vec<Handle>,
 }
 
 impl Svdag {
-    pub fn new(arena: ArenaAllocator<Slot>, num_roots: u32) -> Self {
+    pub fn new(block_allocator: Arc<dyn BlockAllocator>, num_roots: u32) -> Self {
+        let arena: ArenaAllocator<Slot> = ArenaAllocator::new(block_allocator);
         Svdag {
             arena,
             roots: vec![Handle::none(); num_roots as usize],
@@ -70,6 +73,10 @@ impl Svdag {
     }
     #[cfg(test)]
     pub fn potato() -> Self {
-        Self::new(ArenaAllocator::<Slot>::potato(), 1)
+        let block_allocator = Arc::new(super::block_alloc::SystemBlockAllocator::new(
+            super::arena_alloc::BLOCK_SIZE as usize,
+        ));
+
+        Self::new(block_allocator, 1)
     }
 }

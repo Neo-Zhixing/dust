@@ -295,6 +295,9 @@ impl BlockAllocator for DiscreteBlockAllocator {
         // allocated memory ranges.
         copy_completed
     }
+    fn get_blocksize(&self) -> u64 {
+        self.block_size
+    }
 }
 
 /// Returns SystemMemId, DeviceMemId

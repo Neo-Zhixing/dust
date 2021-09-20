@@ -23,7 +23,10 @@ fn setup(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
+    asset_server: Res<AssetServer>,
 ) {
+    let scene_handle: Handle<dust_new::VoxelModel> = asset_server.load("castle.vox");
+
     commands.spawn_bundle(PbrBundle {
         mesh: meshes.add(Mesh::from(shape::Cube { size: 1.0 })),
         material: materials.add(StandardMaterial {
@@ -71,6 +74,7 @@ fn setup(
         .insert(Raytraced {
             aabb_extent: bevy::math::Vec3::new(1.0, 1.0, 1.0),
         })
+        .insert(scene_handle)
         .insert(GlobalTransform::default())
         .insert(Transform::from_xyz(0.0, 1.0, 0.0));
     /*

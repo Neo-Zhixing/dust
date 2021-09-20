@@ -6,7 +6,7 @@ pub struct DeviceInfo {
     pub physical_device_properties: vk::PhysicalDeviceProperties,
     pub acceleration_structure_properties: vk::PhysicalDeviceAccelerationStructurePropertiesKHR,
     pub raytracing_pipeline_properties: vk::PhysicalDeviceRayTracingPipelinePropertiesKHR,
-    memory_properties: vk::PhysicalDeviceMemoryProperties,
+    pub memory_properties: vk::PhysicalDeviceMemoryProperties,
     // TODO: use proc macro to generate bitfields for this
     pub features: vk::PhysicalDeviceFeatures,
     pub buffer_device_address_features: vk::PhysicalDeviceBufferDeviceAddressFeatures,

@@ -27,6 +27,8 @@ wgpu = { path = "../wgpu/wgpu", features = ["spirv"] }
 wgpu-hal = { path = "../wgpu/wgpu-hal" }
 wgpu-types = { path = "../wgpu/wgpu-types" }
 crossbeam = "0.8"
+dot_vox = "4.1.0"
+anyhow = "*"
 
 [build-dependencies]
 shaderc = "0.7"

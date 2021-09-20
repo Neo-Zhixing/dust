@@ -45,12 +45,14 @@ pub trait BlockAllocator: Send + Sync {
 
     // Returns false if the async copy is still busy.
     fn can_flush(&self) -> bool;
+
+    fn get_blocksize(&self) -> u64;
 }
 
 pub struct AllocatorCreateInfo {
-    bind_transfer_queue: vk::Queue,
-    bind_transfer_queue_family: u32,
-    graphics_queue_family: u32,
-    block_size: u64,
-    max_storage_buffer_size: u64,
+    pub bind_transfer_queue: vk::Queue,
+    pub bind_transfer_queue_family: u32,
+    pub graphics_queue_family: u32,
+    pub block_size: u64,
+    pub max_storage_buffer_size: u64,
 }

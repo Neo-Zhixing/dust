@@ -41,4 +41,7 @@ impl BlockAllocator for SystemBlockAllocator {
     fn can_flush(&self) -> bool {
         true
     }
+    fn get_blocksize(&self) -> u64 {
+        self.block_size as u64
+    }
 }

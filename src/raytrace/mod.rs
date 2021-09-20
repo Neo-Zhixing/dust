@@ -4,21 +4,28 @@ mod ray_pass_driver;
 mod ray_shaders;
 mod svdag;
 mod tlas;
+mod vox;
 
 use ash::vk;
 
 use bevy::render2::camera::PerspectiveProjection;
 use bevy::render2::view::{ExtractedView, ViewMeta};
 pub use tlas::Raytraced;
+pub use vox::VoxelModel;
 
 use bevy::prelude::*;
 use bevy::render2::render_graph::{Node, RenderGraph, SlotInfo, SlotType};
 use bevy::render2::RenderApp;
 
-use crate::Queues;
-
+use self::block_alloc::{
+    AllocatorCreateInfo, BlockAllocator, DiscreteBlockAllocator, IntegratedBlockAllocator,
+};
 use self::ray_shaders::RayShaders;
 use self::tlas::TlasState;
+use crate::device_info::DeviceInfo;
+use crate::Queues;
+
+use std::sync::Arc;
 
 #[derive(Default)]
 pub struct RaytracePlugin;
@@ -29,6 +36,51 @@ mod raytracing_graph {
         pub const VIEW_ENTITY: &str = "view_entity";
         pub const RENDER_TARGET: &str = "render_target";
         pub const DEPTH: &str = "depth";
+    }
+}
+
+impl RaytracePlugin {
+    fn add_block_allocator(&self, app: &mut App) {
+        let render_app = app.sub_app(RenderApp);
+        let device_info = render_app.world.get_resource::<DeviceInfo>().unwrap();
+        let device = render_app
+            .world
+            .get_resource::<ash::Device>()
+            .unwrap()
+            .clone();
+        let queue = render_app.world.get_resource::<Queues>().unwrap();
+        let create_info = AllocatorCreateInfo {
+            bind_transfer_queue: queue.transfer_binding_queue,
+            bind_transfer_queue_family: queue.transfer_binding_queue_family,
+            graphics_queue_family: queue.graphics_queue_family,
+            block_size: arena_alloc::BLOCK_SIZE,
+            max_storage_buffer_size: device_info
+                .physical_device_properties
+                .limits
+                .max_storage_buffer_range as u64,
+        };
+        let block_allocator: Arc<dyn BlockAllocator> =
+            match device_info.physical_device_properties.device_type {
+                vk::PhysicalDeviceType::DISCRETE_GPU => unsafe {
+                    let allocator = DiscreteBlockAllocator::new(
+                        device,
+                        &device_info.memory_properties,
+                        &create_info,
+                    );
+                    Arc::new(allocator)
+                },
+                vk::PhysicalDeviceType::INTEGRATED_GPU => unsafe {
+                    let allocator = IntegratedBlockAllocator::new(
+                        device,
+                        &device_info.memory_properties,
+                        &create_info,
+                    );
+                    Arc::new(allocator)
+                },
+                _ => panic!("Unsupported GPU"),
+            };
+        render_app.insert_resource(block_allocator.clone());
+        app.insert_resource(block_allocator);
     }
 }
 
@@ -90,6 +142,9 @@ impl Plugin for RaytracePlugin {
 
         render_app.add_plugin(tlas::TlasPlugin::default());
         render_app.init_resource::<ray_shaders::RayShaders>();
+
+        self.add_block_allocator(app);
+        app.add_plugin(vox::VoxPlugin::default());
     }
 }
 

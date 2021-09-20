@@ -126,6 +126,9 @@ impl BlockAllocator for IntegratedBlockAllocator {
     fn can_flush(&self) -> bool {
         true
     }
+    fn get_blocksize(&self) -> u64 {
+        self.block_size
+    }
 }
 
 fn select_integrated_memtype(

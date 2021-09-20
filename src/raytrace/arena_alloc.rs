@@ -5,9 +5,9 @@ use std::mem::{size_of, ManuallyDrop};
 use std::ptr::NonNull;
 use std::sync::Arc;
 
-pub const BLOCK_MASK_DEGREE: u32 = 20;
+pub const BLOCK_MASK_DEGREE: u32 = 14;
 pub const NUM_SLOTS_IN_BLOCK: u32 = 1 << BLOCK_MASK_DEGREE;
-pub const BLOCK_SIZE: u64 = NUM_SLOTS_IN_BLOCK as u64 * 24;
+pub const BLOCK_SIZE: u64 = NUM_SLOTS_IN_BLOCK as u64 * 4;
 pub const BLOCK_MASK: u32 = NUM_SLOTS_IN_BLOCK - 1;
 
 #[derive(Copy, Clone, Debug, Ord, PartialOrd, Eq, PartialEq)]
@@ -78,6 +78,7 @@ unsafe impl<T: ArenaAllocated> Sync for ArenaAllocator<T> {}
 
 impl<T: ArenaAllocated> ArenaAllocator<T> {
     pub fn new(block_allocator: Arc<ArenaBlockAllocator>) -> Self {
+        assert_eq!(block_allocator.get_blocksize(), BLOCK_SIZE);
         debug_assert!(size_of::<T>() >= size_of::<FreeSlot>(),);
         Self {
             block_allocator,
