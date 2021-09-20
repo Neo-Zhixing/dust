@@ -3,6 +3,8 @@
 #![feature(untagged_unions)]
 #![feature(allocator_api)]
 #![feature(slice_ptr_get)]
+#![feature(asm)]
+#![feature(core_intrinsics)]
 
 mod device_info;
 mod queues;

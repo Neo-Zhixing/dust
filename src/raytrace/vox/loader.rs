@@ -36,37 +36,16 @@ impl AssetLoader for VoxLoader {
             println!("started loading vox");
             let scene = dot_vox::load_bytes(bytes).map_err(|err| anyhow::Error::msg(err))?;
             println!("end loading vox");
+            let model = &scene.models[0];
+            let size = model.size.x.max(model.size.y).max(model.size.z);
+            let size = crate::util::next_pow2_sqrt(size) as u8;
+            let mut svdag = Svdag::new(self.block_allocator.clone(), 1);
+            let mut grid = svdag.get_grid_accessor_mut(size, 0);
 
-            for (i, model) in scene.models.iter().enumerate() {
-                let svdag = Svdag::new(self.block_allocator.clone(), 1);
-                let mut min: (u8, u8, u8) = (u8::MAX, u8::MAX, u8::MAX);
-                let mut max: (u8, u8, u8) = (0, 0, 0);
-                for v in model.voxels.iter() {
-                    min.0 = min.0.min(v.x);
-                    min.1 = min.1.min(v.y);
-                    min.2 = min.2.min(v.z);
-                    max.0 = max.0.max(v.x);
-                    max.1 = max.1.max(v.y);
-                    max.2 = max.2.max(v.z);
-                }
-                if model.size.x != max.0 as u32 - min.0 as u32 + 1 {
-                    println!("Failed for {}", i);
-                }
-                if model.size.y != max.1 as u32 - min.1 as u32 + 1 {
-                    println!("Failed for {}", i);
-                }
-                if model.size.z != max.2 as u32 - min.2 as u32 + 1 {
-                    println!("Failed for {}", i);
-                }
-                println!("{} / {}", i, scene.models.len());
-
-                load_context.set_labeled_asset(
-                    &format!("model {}", i),
-                    LoadedAsset::new(VoxelModel { svdag }),
-                );
+            for voxel in model.voxels.iter() {
+                grid.set(voxel.x as u32, voxel.y as u32, voxel.z as u32, true);
             }
-            println!("All done");
-
+            load_context.set_default_asset(LoadedAsset::new(VoxelModel { svdag }));
             Ok(())
         })
     }

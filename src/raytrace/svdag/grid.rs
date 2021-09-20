@@ -9,6 +9,9 @@ pub struct GridAccessor<'a> {
 
 impl<'a> GridAccessor<'a> {
     pub fn get(&self, mut x: u32, mut y: u32, mut z: u32) -> bool {
+        if self.root.is_none() {
+            return false;
+        }
         let mut gridsize = 1 << self.size;
         let mut handle = self.root;
         while gridsize > 2 {
@@ -76,19 +79,27 @@ impl<'a> GridAccessorMut<'a> {
         accessor.get(x, y, z)
     }
     pub fn set(&mut self, x: u32, y: u32, z: u32, occupancy: bool) {
-        self.set_recursive(self.root, x, y, z, 1 << self.size, occupancy);
+        let mut root = self.root;
+        unsafe {
+            self.set_recursive(&mut root, x, y, z, 1 << self.size, occupancy);
+        }
+        self.root = root;
     }
 
-    // Returns: (avg, collapse)
-    fn set_recursive(
+    // Returns: avg
+    // Base case: when gridsize = 2 and parent node is non-null, set the occupancy corner in the parent node.
+    //            if this causes the parent to have uniform occupancy and no children, collapse the parent by deallocating it.
+    // Induction step: for gridsize > 2 and parent node is non-null, call avg = self(gridsize / 2) and set the occupancy in the parent node.
+    //                 if this causes the parent node to have uniform
+    unsafe fn set_recursive(
         &mut self,
-        mut handle: Handle,
+        mut handle: &mut Handle,
         mut x: u32,
         mut y: u32,
         mut z: u32,
         mut gridsize: u32,
         occupancy: bool,
-    ) -> (bool, bool) {
+    ) -> bool {
         gridsize = gridsize / 2;
         let mut corner: u8 = 0;
         if x >= gridsize {
@@ -105,50 +116,71 @@ impl<'a> GridAccessorMut<'a> {
         }
         if gridsize <= 1 {
             // is leaf node
-            let header = unsafe { &mut self.dag.arena.get_mut(handle).header };
+            let is_none = handle.is_none();
+            if std::intrinsics::unlikely(is_none) {
+                // This happens only when gridsize = 2.
+                // TODO: set handle to be something.
+                *handle = self.dag.arena.alloc(1);
+                let header = &mut self.dag.arena.get_mut(*handle).header;
+                header.child_mask = 0;
+                header.occupancy_mask = 0;
+            }
+            let header = &mut self.dag.arena.get_mut(*handle).header;
             header.set_occupancy_at_corner_u8(corner, occupancy);
             if header.has_child_at_corner_u8(corner) {
                 // has children. Cut them off.
                 todo!()
             }
         } else {
-            let mut header = unsafe { &mut self.dag.arena.get_mut(handle).header };
-            if !header.has_child_at_corner_u8(corner) {
-                // no children
-                // create a new node at that location
-                unsafe {
-                    let new_mask = header.child_mask | (1 << corner);
-                    handle = self.reshape(handle, new_mask);
-                    header = &mut self.dag.arena.get_mut(handle).header
+            let mut new_handle = Handle::none();
+            if !handle.is_none() {
+                let header = &self.dag.arena.get(*handle).header;
+                if header.has_child_at_corner_u8(corner) {
+                    new_handle = header.child_at_corner_u8(corner).handle;
                 }
             }
+            let avg = self.set_recursive(&mut new_handle, x, y, z, gridsize, occupancy);
 
-            let new_handle = unsafe { header.child_at_corner_u8(corner).handle };
-            let (avg, collapsed) = self.set_recursive(new_handle, x, y, z, gridsize, occupancy);
-
-            let mut header = unsafe { &mut self.dag.arena.get_mut(handle).header };
-            header.set_occupancy_at_corner_u8(corner, avg);
-            if collapsed {
-                unsafe {
-                    let new_mask = header.child_mask & !(1 << corner);
-                    handle = self.reshape(handle, new_mask);
-                    header = &mut self.dag.arena.get_mut(handle).header
+            if new_handle.is_none() {
+                // children was collapsed
+                // REMOVE child node.
+                todo!();
+            } else {
+                // children exists.
+                // put new_handle into the parent node
+                if handle.is_none() {
+                    // Allocate new
+                    *handle = self.dag.arena.alloc(2);
+                    let header = &mut self.dag.arena.get_mut(*handle).header;
+                    header.child_mask = 1 << corner;
+                    if avg {
+                        header.occupancy_mask = 1 << corner;
+                    } else {
+                        header.occupancy_mask = 0;
+                    }
+                } else {
+                    // Parent already exists.
+                    self.insert_children(handle, corner);
                 }
+                self.dag
+                    .arena
+                    .get_mut(*handle)
+                    .header
+                    .child_at_corner_mut_u8(corner)
+                    .handle = new_handle;
             }
         }
 
-        let header = unsafe { &self.dag.arena.get_mut(handle).header };
+        let header = &mut self.dag.arena.get_mut(*handle).header;
         if header.child_mask == 0 {
             // node has no children
             // collapse node
-            if header.occupancy_mask == 0xFF {
-                return (true, true);
-            } else if header.occupancy_mask == 0 {
-                return (false, true);
+            if header.occupancy_mask == 0 || header.occupancy_mask == 0xFF {
+                todo!();
             }
         }
         let avg = header.occupancy_mask.count_ones() >= 4;
-        return (avg, false);
+        avg
     }
 
     // Change the childmask of the node located at node_handle
@@ -161,6 +193,7 @@ impl<'a> GridAccessorMut<'a> {
     // TODO: make sure the freeing is recursive.
     unsafe fn reshape(&mut self, old_handle: Handle, new_mask: u8) -> Handle {
         let old_slot = self.dag.arena.get(old_handle);
+        let occupancy_mask = old_slot.header.occupancy_mask;
         let old_mask = old_slot.header.child_mask;
         if old_mask == new_mask {
             return old_handle;
@@ -201,7 +234,19 @@ impl<'a> GridAccessorMut<'a> {
             }
         }
         self.dag.arena.free(old_handle, old_slot_num_child + 1);
+
+        let new_slot = self.dag.arena.get_mut(new_handle);
+        new_slot.header.child_mask = new_mask;
+        new_slot.header.occupancy_mask = occupancy_mask;
+
         new_handle
+    }
+
+    unsafe fn insert_children(&mut self, handle: &mut Handle, corner: u8) {
+        let old_handle = *handle;
+        let old_mask = self.dag.arena.get(old_handle).header.child_mask;
+        let new_handle = self.reshape(old_handle, old_mask | (1 << corner));
+        *handle = new_handle;
     }
 }
 
@@ -228,13 +273,31 @@ impl Svdag {
 mod tests {
     use super::Svdag;
 
+    #[test]
     fn test_set() {
         let mut dag = Svdag::potato();
-        let mut grid = dag.get_grid_accessor_mut(16, 0);
+        let mut grid = dag.get_grid_accessor_mut(2, 0);
 
         assert!(!grid.get(0, 0, 0));
         grid.set(0, 0, 0, true);
         assert!(grid.get(0, 0, 0));
+        assert!(!grid.get(1, 0, 0));
+        assert!(!grid.get(0, 1, 0));
+        assert!(!grid.get(0, 1, 1));
         assert_eq!(grid.dag.arena.get_size(), 3);
+
+        for x in 0..=1 {
+            for y in 0..=1 {
+                grid.set(x, y, 1, true);
+            }
+        }
+        grid.set(0, 1, 0, true);
+        grid.set(1, 0, 0, true);
+        assert_eq!(grid.dag.arena.get_size(), 3);
+
+        assert!(!grid.get(1, 1, 0));
+        grid.set(1, 1, 0, true);
+        assert!(grid.get(1, 1, 0));
+        assert_eq!(grid.dag.arena.get_size(), 2);
     }
 }
