@@ -17,6 +17,7 @@ pub struct VoxPlugin;
 
 impl bevy::app::Plugin for VoxPlugin {
     fn build(&self, app: &mut App) {
-        app.init_asset_loader::<loader::VoxLoader>();
+        app.init_asset_loader::<loader::VoxLoader>()
+            .add_asset::<VoxelModel>();
     }
 }

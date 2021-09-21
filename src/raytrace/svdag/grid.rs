@@ -142,9 +142,7 @@ impl<'a> GridAccessorMut<'a> {
             let avg = self.set_recursive(&mut new_handle, x, y, z, gridsize, occupancy);
 
             if new_handle.is_none() {
-                // children was collapsed
-                // REMOVE child node.
-                todo!();
+                self.remove_children(handle, corner);
             } else {
                 // children exists.
                 // put new_handle into the parent node
@@ -153,11 +151,7 @@ impl<'a> GridAccessorMut<'a> {
                     *handle = self.dag.arena.alloc(2);
                     let header = &mut self.dag.arena.get_mut(*handle).header;
                     header.child_mask = 1 << corner;
-                    if avg {
-                        header.occupancy_mask = 1 << corner;
-                    } else {
-                        header.occupancy_mask = 0;
-                    }
+                    header.occupancy_mask = 0;
                 } else {
                     // Parent already exists.
                     self.insert_children(handle, corner);
@@ -169,14 +163,24 @@ impl<'a> GridAccessorMut<'a> {
                     .child_at_corner_mut_u8(corner)
                     .handle = new_handle;
             }
+            let header = &mut self.dag.arena.get_mut(*handle).header;
+            if avg {
+                header.occupancy_mask |= 1 << corner;
+            } else {
+                header.occupancy_mask &= !(1 << corner);
+            }
         }
 
         let header = &mut self.dag.arena.get_mut(*handle).header;
         if header.child_mask == 0 {
             // node has no children
             // collapse node
-            if header.occupancy_mask == 0 || header.occupancy_mask == 0xFF {
-                todo!();
+            let occupancy_mask = header.occupancy_mask;
+            if occupancy_mask == 0 || occupancy_mask == 0xFF {
+                let block_size = header.child_mask.count_ones() as u8 + 1;
+                self.dag.arena.free(*handle, block_size);
+                *handle = Handle::none();
+                return occupancy_mask == 0xFF;
             }
         }
         let avg = header.occupancy_mask.count_ones() >= 4;
@@ -210,21 +214,19 @@ impl<'a> GridAccessorMut<'a> {
             let old_have_children_at_i = old_mask & (1 << i) != 0;
             let new_have_children_at_i = new_mask & (1 << i) != 0;
             if old_have_children_at_i && new_have_children_at_i {
-                unsafe {
-                    std::ptr::copy(
-                        &self
-                            .dag
-                            .arena
-                            .get(old_handle.offset((old_slot_num + 1) as u32))
-                            .body,
-                        &mut self
-                            .dag
-                            .arena
-                            .get_mut(new_handle.offset((new_slot_num + 1) as u32))
-                            .body,
-                        1,
-                    );
-                }
+                std::ptr::copy(
+                    &self
+                        .dag
+                        .arena
+                        .get(old_handle.offset((old_slot_num + 1) as u32))
+                        .body,
+                    &mut self
+                        .dag
+                        .arena
+                        .get_mut(new_handle.offset((new_slot_num + 1) as u32))
+                        .body,
+                    1,
+                );
             }
             if old_have_children_at_i {
                 old_slot_num += 1;
@@ -246,6 +248,12 @@ impl<'a> GridAccessorMut<'a> {
         let old_handle = *handle;
         let old_mask = self.dag.arena.get(old_handle).header.child_mask;
         let new_handle = self.reshape(old_handle, old_mask | (1 << corner));
+        *handle = new_handle;
+    }
+    unsafe fn remove_children(&mut self, handle: &mut Handle, corner: u8) {
+        let old_handle = *handle;
+        let old_mask = self.dag.arena.get(old_handle).header.child_mask;
+        let new_handle = self.reshape(old_handle, old_mask & !(1 << corner));
         *handle = new_handle;
     }
 }
@@ -284,7 +292,7 @@ mod tests {
         assert!(!grid.get(1, 0, 0));
         assert!(!grid.get(0, 1, 0));
         assert!(!grid.get(0, 1, 1));
-        assert_eq!(grid.dag.arena.get_size(), 3);
+        assert_eq!(grid.dag.arena.get_size(), 3); // Root node, and root node has one children.
 
         for x in 0..=1 {
             for y in 0..=1 {
@@ -295,9 +303,14 @@ mod tests {
         grid.set(1, 0, 0, true);
         assert_eq!(grid.dag.arena.get_size(), 3);
 
+        grid.set(3, 3, 3, true);
+        assert!(grid.get(3, 3, 3));
+        assert_eq!(grid.dag.arena.get_size(), 5);
+
+        // Fill in the last peace before collapse
         assert!(!grid.get(1, 1, 0));
         grid.set(1, 1, 0, true);
         assert!(grid.get(1, 1, 0));
-        assert_eq!(grid.dag.arena.get_size(), 2);
+        assert_eq!(grid.dag.arena.get_size(), 3);
     }
 }
