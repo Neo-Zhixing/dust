@@ -45,6 +45,8 @@ impl AssetLoader for VoxLoader {
             for voxel in model.voxels.iter() {
                 grid.set(voxel.x as u32, voxel.y as u32, voxel.z as u32, true);
             }
+
+            svdag.flush_all();
             load_context.set_default_asset(LoadedAsset::new(VoxelModel { svdag }));
             Ok(())
         })

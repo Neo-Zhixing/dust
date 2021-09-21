@@ -298,6 +298,9 @@ impl BlockAllocator for DiscreteBlockAllocator {
     fn get_blocksize(&self) -> u64 {
         self.block_size
     }
+    fn get_buffer(&self) -> vk::Buffer {
+        self.device_buffer
+    }
 }
 
 /// Returns SystemMemId, DeviceMemId

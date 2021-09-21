@@ -92,4 +92,8 @@ impl Svdag {
 
         Self::new(block_allocator, 1)
     }
+
+    pub fn flush_all(&self) {
+        self.arena.flush_all();
+    }
 }

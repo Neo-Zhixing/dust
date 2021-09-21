@@ -2,12 +2,14 @@ use bevy::{ecs::system::SystemState, prelude::*};
 use gpu_alloc::Request;
 use gpu_alloc_ash::AshMemoryDevice;
 
+use super::block_alloc::BlockAllocator;
 use super::tlas::TlasState;
 use crate::device_info::DeviceInfo;
 use crate::raytrace::RaytracingNodeViewConstants;
 use ash::vk;
 use std::ffi::CStr;
 use std::io::Cursor;
+use std::sync::Arc;
 
 pub struct RayShaders {
     pub pipeline: vk::Pipeline,
@@ -25,16 +27,24 @@ pub struct RayShaders {
 
 impl FromWorld for RayShaders {
     fn from_world(world: &mut World) -> Self {
-        let (tlas_state, device, raytracing_loader, device_info, mut allocator, desc_pool) =
-            SystemState::<(
-                Res<TlasState>,
-                Res<ash::Device>,
-                Res<ash::extensions::khr::RayTracingPipeline>,
-                Res<DeviceInfo>,
-                ResMut<crate::Allocator>,
-                Res<vk::DescriptorPool>,
-            )>::new(world)
-            .get_mut(world);
+        let (
+            tlas_state,
+            block_allocator,
+            device,
+            raytracing_loader,
+            device_info,
+            mut allocator,
+            desc_pool,
+        ) = SystemState::<(
+            Res<TlasState>,
+            Res<Arc<dyn BlockAllocator>>,
+            Res<ash::Device>,
+            Res<ash::extensions::khr::RayTracingPipeline>,
+            Res<DeviceInfo>,
+            ResMut<crate::Allocator>,
+            Res<vk::DescriptorPool>,
+        )>::new(world)
+        .get_mut(world);
 
         unsafe {
             let depth_sampler = device
@@ -63,6 +73,18 @@ impl FromWorld for RayShaders {
                                 .descriptor_count(1)
                                 .stage_flags(vk::ShaderStageFlags::RAYGEN_KHR)
                                 .build(),
+                            vk::DescriptorSetLayoutBinding::builder()
+                                .binding(2)
+                                .descriptor_type(vk::DescriptorType::ACCELERATION_STRUCTURE_KHR)
+                                .descriptor_count(1)
+                                .stage_flags(vk::ShaderStageFlags::RAYGEN_KHR)
+                                .build(),
+                            vk::DescriptorSetLayoutBinding::builder()
+                                .binding(3)
+                                .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
+                                .descriptor_count(1)
+                                .stage_flags(vk::ShaderStageFlags::RAYGEN_KHR)
+                                .build(),
                         ])
                         .build(),
                     None,
@@ -82,7 +104,7 @@ impl FromWorld for RayShaders {
             let pipeline_layout = device
                 .create_pipeline_layout(
                     &vk::PipelineLayoutCreateInfo::builder()
-                        .set_layouts(&[target_img_desc_layout, tlas_state.desc_set_layout])
+                        .set_layouts(&[target_img_desc_layout])
                         .push_constant_ranges(&[vk::PushConstantRange {
                             stage_flags: vk::ShaderStageFlags::RAYGEN_KHR,
                             offset: 0,
@@ -349,6 +371,20 @@ impl FromWorld for RayShaders {
 
             sbt_mem.unmap(AshMemoryDevice::wrap(&*device));
             let device_address = rounded_device_address;
+
+            device.update_descriptor_sets(
+                &[vk::WriteDescriptorSet::builder()
+                    .dst_set(target_img_desc_set)
+                    .dst_binding(3)
+                    .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
+                    .buffer_info(&[vk::DescriptorBufferInfo::builder()
+                        .buffer(block_allocator.get_buffer())
+                        .offset(0)
+                        .range(block_allocator.get_blocksize())
+                        .build()])
+                    .build()],
+                &[],
+            );
             RayShaders {
                 pipeline: raytracing_pipeline,
                 pipeline_layout,

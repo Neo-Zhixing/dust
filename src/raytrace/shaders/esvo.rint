@@ -3,6 +3,10 @@
 
 #include "shared.glsl"
 
+layout(set = 0, binding = 3) readonly buffer Chunk {
+    uint values[];
+};
+
 vec2 intersectAABB(vec3 origin, vec3 dir, vec4 box) {
     vec3 box_min = box.xyz;
     vec3 box_max = box_min + box.w;

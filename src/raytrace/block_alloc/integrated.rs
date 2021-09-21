@@ -129,6 +129,9 @@ impl BlockAllocator for IntegratedBlockAllocator {
     fn get_blocksize(&self) -> u64 {
         self.block_size
     }
+    fn get_buffer(&self) -> vk::Buffer {
+        self.buffer
+    }
 }
 
 fn select_integrated_memtype(

@@ -141,10 +141,12 @@ impl Plugin for RaytracePlugin {
             .unwrap();
 
         render_app.add_plugin(tlas::TlasPlugin::default());
-        render_app.init_resource::<ray_shaders::RayShaders>();
 
         self.add_block_allocator(app);
         app.add_plugin(vox::VoxPlugin::default());
+
+        app.sub_app(RenderApp)
+            .init_resource::<ray_shaders::RayShaders>();
     }
 }
 
@@ -251,6 +253,18 @@ impl Node for RaytracingNode {
         };
 
         unsafe {
+            let write_desc_set_as_ext = vk::WriteDescriptorSetAccelerationStructureKHR::builder()
+                .acceleration_structures(&[tlas_state.tlas])
+                .build();
+            let mut write_desc_set_as = vk::WriteDescriptorSet::builder()
+                .dst_set(ray_shaders.target_img_desc_set)
+                .dst_binding(2)
+                .descriptor_type(vk::DescriptorType::ACCELERATION_STRUCTURE_KHR)
+                .build();
+            write_desc_set_as.p_next =
+                &write_desc_set_as_ext as *const _ as *const std::ffi::c_void;
+            write_desc_set_as.descriptor_count = 1;
+
             device.update_descriptor_sets(
                 &[
                     vk::WriteDescriptorSet::builder()
@@ -273,6 +287,7 @@ impl Node for RaytracingNode {
                             image_layout: vk::ImageLayout::GENERAL, // TODO: ???
                         }])
                         .build(),
+                    write_desc_set_as,
                 ],
                 &[],
             );
@@ -282,7 +297,7 @@ impl Node for RaytracingNode {
                     let command_buffer = command_buffer.active;
                     assert_ne!(command_buffer, vk::CommandBuffer::null());
 
-                    let desc_sets = [ray_shaders.target_img_desc_set, tlas_state.desc_set];
+                    let desc_sets = [ray_shaders.target_img_desc_set];
                     device.cmd_pipeline_barrier(
                         command_buffer,
                         vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT,

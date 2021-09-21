@@ -225,6 +225,14 @@ impl<T: ArenaAllocated> ArenaAllocator<T> {
     pub fn get_size(&self) -> u32 {
         self.size
     }
+
+    pub fn flush_all(&self) {
+        let block_size = self.block_allocator.get_blocksize() as u32;
+        let mut iterator = self.chunks.iter().map(|chunk| (&chunk.1, 0..block_size));
+        unsafe {
+            self.block_allocator.flush(&mut iterator);
+        }
+    }
 }
 
 #[cfg(test)]
