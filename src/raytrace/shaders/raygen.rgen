@@ -17,7 +17,7 @@ layout(push_constant) uniform constants {
 
 void main() {
     const vec2 pixelNDC = (vec2(gl_LaunchIDEXT.xy) + vec2(0.5)) / vec2(gl_LaunchSizeEXT.xy);
-  const float near = 0.1; // Near plane was assumed to be at 0.1
+    const float near = 0.1; // Near plane was assumed to be at 0.1
     float z = near / texture(depthTexture, pixelNDC).r; // depth obtained from rasterization
 
 
@@ -44,6 +44,6 @@ void main() {
   );
 
   if (!(payload.color.x == 0 && payload.color.y == 0 && payload.color.z == 0)) {
-    imageStore(imgOutput, ivec2(gl_LaunchIDEXT.xy), vec4(1, 1, 1, 1.0));
+    imageStore(imgOutput, ivec2(gl_LaunchIDEXT.xy), vec4(payload.color, 1.0));
   }
 }

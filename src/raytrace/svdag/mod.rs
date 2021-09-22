@@ -96,4 +96,8 @@ impl Svdag {
     pub fn flush_all(&self) {
         self.arena.flush_all();
     }
+
+    pub fn get_roots(&self) -> &[Handle] {
+        &self.roots
+    }
 }

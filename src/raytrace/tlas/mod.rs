@@ -10,6 +10,8 @@ use gpu_alloc_ash::AshMemoryDevice;
 
 use crate::{device_info::DeviceInfo, Queues};
 
+use super::vox;
+
 #[derive(Debug)]
 pub struct Raytraced {
     pub aabb_extent: bevy::math::Vec3,
@@ -315,11 +317,13 @@ fn tlas_setup(app: &mut App) {
 
 fn tlas_update(
     mut render_world: ResMut<RenderWorld>,
+    voxel_models: Res<Assets<crate::VoxelModel>>,
+    mut voxel_model_events: EventReader<AssetEvent<crate::VoxelModel>>,
     anything_changed_query: Query<
-        (&GlobalTransform, &Raytraced),
-        Or<(Changed<GlobalTransform>, Changed<Raytraced>)>,
+        (&GlobalTransform, &Raytraced, &Handle<crate::VoxelModel>),
+        Or<(Changed<GlobalTransform>, Changed<Raytraced>, Changed<Handle<crate::VoxelModel>>)>,
     >,
-    entities_query: Query<(&GlobalTransform, &Raytraced)>,
+    entities_query: Query<(&GlobalTransform, &Raytraced, &Handle<crate::VoxelModel>)>,
 ) {
     let render_world = &mut *render_world;
     let (device, mut state, queues, acceleration_structure_loader, mut allocator, device_info) =
@@ -347,7 +351,7 @@ fn tlas_update(
         }
     }
 
-    let have_updates_this_frame = !anything_changed_query.is_empty(); // have updates this frame
+    let have_updates_this_frame = !anything_changed_query.is_empty() || voxel_model_events.iter().next().is_some(); // have updates this frame
     let have_updates_last_frame = state.needs_update_next_frame;
     let need_to_do_updates = have_updates_last_frame | have_updates_this_frame;
     if !need_to_do_updates {
@@ -364,7 +368,8 @@ fn tlas_update(
     // do updates
     let data: Vec<_> = entities_query
         .iter()
-        .map(|(transform, aabb)| {
+        .filter(|(_, _, model)| !voxel_models.get(*model).is_none())
+        .map(|(transform, aabb, model_handle)| {
             println!("data is {:?}", aabb);
             // We use the same unit box BLAS for all instances. So, we change the shape of the unit box by streching it.
             let scale = transform.scale * aabb.aabb_extent;
@@ -374,12 +379,17 @@ fn tlas_update(
                 transform.translation,
             );
             let mat = mat.transpose().to_cols_array();
+
+            let model = voxel_models.get(model_handle).unwrap();
+            let custom_index = model.svdag.get_roots()[0].get_value();
+            let mask: u8 = 0xFF;
+            println!("custom index is {}", custom_index);
             unsafe {
                 let mut instance = vk::AccelerationStructureInstanceKHR {
                     transform: vk::TransformMatrixKHR {
                         matrix: MaybeUninit::uninit().assume_init(),
                     },
-                    instance_custom_index_and_mask: u32::MAX,
+                    instance_custom_index_and_mask: ((mask as u32) << 24) | (custom_index & 0xFFFFFF),
                     instance_shader_binding_table_record_offset_and_flags: 0,
                     acceleration_structure_reference: vk::AccelerationStructureReferenceKHR {
                         device_handle: state.unit_box_as_device_address,

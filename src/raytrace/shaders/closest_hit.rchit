@@ -6,6 +6,12 @@
 layout(location = 0) rayPayloadInEXT RayPayload payload;
 
 void main() {
-    payload.color = vec3(1.0, 1.0, 1.0);
+    if (gl_InstanceCustomIndexEXT == 43) {
+
+      payload.color = vec3(1.0, 1.0, 0.0);
+    } else {
+        
+      payload.color = vec3(1.0, 1.0, 1.0);
+    }
     payload.t = gl_RayTmaxEXT;
 }

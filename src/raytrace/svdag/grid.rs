@@ -4,16 +4,17 @@ use crate::raytrace::arena_alloc::Handle;
 pub struct GridAccessor<'a> {
     pub(super) dag: &'a Svdag,
     pub(super) size: u8,
-    pub(super) root: Handle,
+    pub(super) root_index: usize,
 }
 
 impl<'a> GridAccessor<'a> {
     pub fn get(&self, mut x: u32, mut y: u32, mut z: u32) -> bool {
-        if self.root.is_none() {
+        let root = self.dag.roots[self.root_index];
+        if root.is_none() {
             return false;
         }
         let mut gridsize = 1 << self.size;
-        let mut handle = self.root;
+        let mut handle = root;
         while gridsize > 2 {
             gridsize = gridsize / 2;
             let mut corner: u8 = 0;
@@ -66,7 +67,7 @@ impl<'a> GridAccessor<'a> {
 pub struct GridAccessorMut<'a> {
     pub(super) dag: &'a mut Svdag,
     pub(super) size: u8,
-    pub(super) root: Handle,
+    pub(super) root_index: usize,
 }
 
 impl<'a> GridAccessorMut<'a> {
@@ -74,16 +75,16 @@ impl<'a> GridAccessorMut<'a> {
         let accessor = GridAccessor {
             dag: self.dag,
             size: self.size,
-            root: self.root,
+            root_index: self.root_index,
         };
         accessor.get(x, y, z)
     }
     pub fn set(&mut self, x: u32, y: u32, z: u32, occupancy: bool) {
-        let mut root = self.root;
+        let mut root = self.dag.roots[self.root_index];
         unsafe {
             self.set_recursive(&mut root, x, y, z, 1 << self.size, occupancy);
         }
-        self.root = root;
+        self.dag.roots[self.root_index] = root;
     }
 
     // Returns: avg
@@ -264,15 +265,14 @@ impl Svdag {
         GridAccessor {
             dag: self,
             size,
-            root: self.roots[frame],
+            root_index: frame
         }
     }
     pub fn get_grid_accessor_mut(&mut self, size: u8, frame: usize) -> GridAccessorMut {
-        let root = self.roots[frame];
         GridAccessorMut {
             dag: self,
             size,
-            root,
+            root_index: frame,
         }
     }
 }

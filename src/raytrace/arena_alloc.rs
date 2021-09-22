@@ -37,6 +37,10 @@ impl Handle {
     pub fn from_index(chunk_index: u32, block_index: u32) -> Handle {
         Handle(chunk_index << BLOCK_MASK_DEGREE | block_index)
     }
+    #[inline]
+    pub fn get_value(&self) -> u32 {
+        self.0
+    }
 }
 
 impl Default for Handle {
