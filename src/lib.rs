@@ -229,7 +229,7 @@ impl DustPlugin {
                         })
                         .push_next(
                             &mut vk::PhysicalDeviceVulkan12Features::builder()
-                                .shader_int8(false)
+                                .shader_int8(true)
                                 .uniform_and_storage_buffer8_bit_access(true)
                                 .buffer_device_address(true)
                                 .timeline_semaphore(true)

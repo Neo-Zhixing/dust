@@ -83,7 +83,7 @@ impl FromWorld for RayShaders {
                                 .binding(3)
                                 .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
                                 .descriptor_count(1)
-                                .stage_flags(vk::ShaderStageFlags::RAYGEN_KHR)
+                                .stage_flags(vk::ShaderStageFlags::INTERSECTION_KHR)
                                 .build(),
                         ])
                         .build(),

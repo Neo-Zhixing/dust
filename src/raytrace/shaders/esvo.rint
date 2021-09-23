@@ -1,11 +1,28 @@
 #version 460
 #extension GL_EXT_ray_tracing : require
+#extension GL_EXT_shader_explicit_arithmetic_types_int8 : require
+
+#define CAST_STACK_DEPTH 23
+#define MAX_RAYCAST_ITERATIONS  200
+#define STACK_HEIGHT 4
+
+
+#define CHILD_DESCRIPTOR_OCCUPANCY child_descriptor.x
+#define CHILD_DESCRIPTOR_CHLILDMASK child_descriptor.y
+#define CHILD_DESCRIPTOR_NEEDS_REFRESH child_descriptor.z
+#define CHILD_DESCRIPTOR_OCCUPIED_AT(child_shift) (((child_descriptor.x) & (1 << child_shift)) != 0)
 
 #include "shared.glsl"
 
-layout(set = 0, binding = 3) readonly buffer Chunk {
-    uint values[];
+layout(set = 0, binding = 3) readonly buffer Chunks {
+    uint Chunks_values[];
 };
+hitAttributeEXT float numIterations;
+struct StackItem {
+    uint parent;
+    float t_max;
+};
+StackItem stack_data[STACK_HEIGHT];
 
 vec2 intersectAABB(vec3 origin, vec3 dir, vec4 box) {
     vec3 box_min = box.xyz;
@@ -18,10 +35,248 @@ vec2 intersectAABB(vec3 origin, vec3 dir, vec4 box) {
     float t_max = min(min(t2.x, t2.y), t2.z);
     return vec2(t_min, t_max);
 }
+uint MaskLocationNthOne(uint mask, uint location) {
+    return bitCount(mask & ((1 << location) - 1));
+}
+
+
+
+struct Ray {
+    vec3 origin;
+    vec3 dir;
+};
+struct Box {
+    vec3 origin;
+    float extent;
+};
+
+void esvo(Ray ray) {
+    uint stack_len = 0;
+    //const float epsilon = exp2(-CAST_STACK_DEPTH);
+    uint iter = 0;
+
+
+    // Get rid of small ray direction components to avoid division by zero
+    // if (abs(ray.dir.x) < epsilon) ray.dir.x = copysign(epsilon, ray.dir.x);
+    // if (fabsf(ray.dir.y) < epsilon) ray.dir.y = copysignf(epsilon, ray.dir.y);
+    // if (fabsf(ray.dir.z) < epsilon) ray.dir.z = copysignf(epsilon, ray.dir.z);
+
+
+    vec3 t_coef = 1.0 / -abs(ray.dir);
+    vec3 t_bias = t_coef * ray.origin;
+
+
+    // Select octant mask to mirror the coordinate system so
+    // that ray direction is negative along each axis.
+
+    int octant_mask = 0; // This is different from the original esvo because our coordinate system was flipped.
+    if (ray.dir.x > 0.0f) octant_mask ^= 4, t_bias.x = 3.0f * t_coef.x - t_bias.x;
+    if (ray.dir.y > 0.0f) octant_mask ^= 2, t_bias.y = 3.0f * t_coef.y - t_bias.y;
+    if (ray.dir.z > 0.0f) octant_mask ^= 1, t_bias.z = 3.0f * t_coef.z - t_bias.z;
+
+
+    // Initialize the active span of t-values.
+
+    float t_min = max(max(2.0f * t_coef.x - t_bias.x, 2.0f * t_coef.y - t_bias.y), 2.0f * t_coef.z - t_bias.z);
+    float t_max = min(min(t_coef.x - t_bias.x, t_coef.y - t_bias.y), t_coef.z - t_bias.z);
+    float h = t_max;
+    t_min = max(t_min, 0.0f);
+    t_max = min(t_max, 1.0f);
+    float t_max_original = t_max;
+    // Initialize the current voxel to the first child of the root.
+
+    uint   parent           = gl_InstanceCustomIndexEXT;
+    u8vec4   child_descriptor = u8vec4(0, 0, 1, 0);
+    uint    idx              = 0;
+    uint    scale            = CAST_STACK_DEPTH - 1;
+    float  scale_exp2       = 0.5f; // exp2f(scale - s_max)
+    vec3 pos;
+    {
+        bvec3 comparison = greaterThan(1.5 * t_coef - t_bias, vec3(t_min, t_min, t_min));
+        pos = mix(vec3(1.0, 1.0, 1.0), vec3(1.5, 1.5, 1.5), comparison);
+        if (comparison.x) idx ^= 4;
+        if (comparison.y) idx ^= 2;
+        if (comparison.z) idx ^= 1;
+    }
+
+
+    while(iter < MAX_RAYCAST_ITERATIONS) {
+        iter++;
+        // Fetch child descriptor unless it is already valid.
+        if (CHILD_DESCRIPTOR_NEEDS_REFRESH != 0) {
+            child_descriptor = unpack8(Chunks_values[parent]);
+            CHILD_DESCRIPTOR_NEEDS_REFRESH = uint8_t(0);
+        }
+
+        
+
+        // Determine maximum t-value of the cube by evaluating
+        // tx(), ty(), and tz() at its corner.
+
+        vec3 t_corner = pos * t_coef - t_bias;
+        float tc_max = min(min(t_corner.x, t_corner.y), t_corner.z);
+
+        // Process voxel if the corresponding bit in valid mask is set
+        // and the active t-span is non-empty.
+        uint child_shift = idx ^ octant_mask;
+        if (
+            // This bit will be 1 if there exists anything inside this node, or if the node itself is a solid leaf.
+            // This bit will be 0 if the node is a leaf, empty node.
+            // That is to say, if this bit is 0, the corresponding bit in the freemask is guaranteed to be 0.
+            CHILD_DESCRIPTOR_OCCUPIED_AT(child_shift) && // check occupancy.
+            (t_min <= t_max)
+        ) {
+            // Terminate if the voxel is small enough.
+            //if (tc_max * PushConstants.terminalPixelSize >= scale_exp2)
+            //    break; // at t_min
+
+
+            // INTERSECT
+            // Intersect active t-span with the cube and evaluate
+            // tx(), ty(), and tz() at the center of the voxel.
+            //float tv_max = min(t_max, tc_max);
+            float tv_max = tc_max; // We kinda assume that t_max will always be less thant tc_max.
+            float half_length = scale_exp2 * 0.5f;
+            vec3 t_center = half_length * t_coef + t_corner;
+
+            if (t_min <= tv_max) {
+                // Terminate if the corresponding bit in the non-leaf mask is not set.
+                if (!CHILD_DESCRIPTOR_OCCUPIED_AT(child_shift))
+                    break;
+
+
+                // PUSH
+                // Write current parent to the stack.
+
+                //if (tc_max < h)
+                {
+                    // stack.write(scale, parent, t_max);
+                    stack_len = min(stack_len + 1, STACK_HEIGHT);
+                    StackItem item;
+                    item.parent = parent;
+                    item.t_max = t_max;
+                    stack_data[scale % STACK_HEIGHT] = item;
+                }
+                h = tc_max;
+
+                // Find child descriptor corresponding to the current voxel.
+                parent = Chunks_values[parent + MaskLocationNthOne(CHILD_DESCRIPTOR_CHLILDMASK, child_shift)];
+
+
+                // Select child voxel that the ray enters first.
+
+                idx = 0;
+                scale--;
+                scale_exp2 = half_length;
+
+                {
+                    if (t_center.x > t_min) idx ^= 4, pos.x += scale_exp2;
+                    if (t_center.y > t_min) idx ^= 2, pos.y += scale_exp2;
+                    if (t_center.z > t_min) idx ^= 1, pos.z += scale_exp2;
+                }
+
+                // Update active t-span and invalidate cached child descriptor.
+
+                t_max = tv_max;
+                CHILD_DESCRIPTOR_NEEDS_REFRESH = uint8_t(1);
+                continue;
+            }
+        }
+
+        // ADVANCE
+        // Step along the ray
+
+        bvec3 b_step_mask = lessThanEqual(t_corner, vec3(tc_max, tc_max, tc_max));
+        uint step_mask = 0;
+        if (b_step_mask.x) step_mask ^= 4, pos.x -= scale_exp2;
+        if (b_step_mask.y) step_mask ^= 2, pos.y -= scale_exp2;
+        if (b_step_mask.z) step_mask ^= 1, pos.z -= scale_exp2;
+
+        // Update active t-span and flip bits of the child slot index.
+
+        t_min = tc_max;
+        idx ^= step_mask;
+
+
+        // Proceed with pop if the bit flips disagree with the ray direction.
+        if ((idx & step_mask) != 0) {
+            // POP
+            // Find the highest differing bit between the two positions.
+            uint differing_bits = 0;
+            if (b_step_mask.x) differing_bits |= floatBitsToUint(pos.x) ^ floatBitsToUint(pos.x + scale_exp2);
+            if (b_step_mask.y) differing_bits |= floatBitsToUint(pos.y) ^ floatBitsToUint(pos.y + scale_exp2);
+            if (b_step_mask.z) differing_bits |= floatBitsToUint(pos.z) ^ floatBitsToUint(pos.z + scale_exp2);
+            uint new_scale = (floatBitsToUint(float(differing_bits)) >> 23) - 127; // position of the highest bit
+            if (new_scale >= CAST_STACK_DEPTH) {
+                break;
+            }
+            uint backoff = new_scale - scale;
+            scale = new_scale;
+            bool needs_restart = backoff > stack_len;
+            stack_len -= backoff;
+            scale_exp2 = uintBitsToFloat((scale - CAST_STACK_DEPTH + 127) << 23); // exp2f(scale - s_max)
+            StackItem stackVal = stack_data[scale % STACK_HEIGHT];
+            parent = stackVal.parent;
+            t_max = stackVal.t_max;
+
+            uvec3 sh = floatBitsToUint(pos) >> scale;
+            pos = uintBitsToFloat(sh << scale);
+            idx  = (sh.z & 1) | ((sh.y & 1) << 1) | ((sh.x & 1) << 2);
+
+            h = 0.0;
+            CHILD_DESCRIPTOR_NEEDS_REFRESH = uint8_t(1);
+            t_min += exp2(-float(CAST_STACK_DEPTH));
+
+            if (needs_restart) {
+                // restart
+                stack_len = 0;
+                scale = CAST_STACK_DEPTH - 1;
+                scale_exp2 = 0.5;
+                parent = 0;
+                t_max = t_max_original;
+                pos = vec3(1.0f, 1.0f, 1.0f);
+                idx = 0;
+                if (1.5f * t_coef.x - t_bias.x > t_min) idx ^= 4, pos.x = 1.5f;
+                if (1.5f * t_coef.y - t_bias.y > t_min) idx ^= 2, pos.y = 1.5f;
+                if (1.5f * t_coef.z - t_bias.z > t_min) idx ^= 1, pos.z = 1.5f;
+            }
+        }
+    }
+
+
+
+    
+    // Indicate miss if we are outside the octree.
+    if (scale >= CAST_STACK_DEPTH || iter > MAX_RAYCAST_ITERATIONS) {
+        t_min = 2.0f;
+    }
+    // Undo mirroring of the coordinate system.
+/*
+    if ((octant_mask & 4) == 0) pos.x = 3.0f - scale_exp2 - pos.x;
+    if ((octant_mask & 2) == 0) pos.y = 3.0f - scale_exp2 - pos.y;
+    if ((octant_mask & 1) == 0) pos.z = 3.0f - scale_exp2 - pos.z;
+*/
+    // Output results.
+/*
+    res.t = t_min;
+    res.iter = iter;
+    res.pos.x = fminf(fmaxf(ray.orig.x + t_min * ray.dir.x, pos.x + epsilon), pos.x + scale_exp2 - epsilon);
+    res.pos.y = fminf(fmaxf(ray.orig.y + t_min * ray.dir.y, pos.y + epsilon), pos.y + scale_exp2 - epsilon);
+    res.pos.z = fminf(fmaxf(ray.orig.z + t_min * ray.dir.z, pos.z + epsilon), pos.z + scale_exp2 - epsilon);
+    res.node = parent;
+    res.childIdx = idx ^ octant_mask ^ 7;
+    res.stackPtr = scale;
+*/
+    numIterations = float(iter) / 10;
+
+        reportIntersectionEXT(1000, 0);
+}
+
 
 void main()
-{	
-
-	vec2 intersection = intersectAABB(gl_WorldRayOriginEXT, gl_WorldRayDirectionEXT,  vec4(0,0,0,1));
-    reportIntersectionEXT(intersection.x, 0);
+{
+    Ray ray;
+    ray.origin = gl_WorldRayOriginEXT - gl_ObjectToWorldEXT[3] + vec3(1,1,1);
+    ray.dir = gl_WorldRayDirectionEXT;
+    esvo(ray);
 }
