@@ -7,10 +7,11 @@
 #define STACK_HEIGHT 4
 
 
-#define CHILD_DESCRIPTOR_OCCUPANCY child_descriptor.x
-#define CHILD_DESCRIPTOR_CHLILDMASK child_descriptor.y
+#define CHILD_DESCRIPTOR_CHLILDMASK child_descriptor.x
+#define CHILD_DESCRIPTOR_OCCUPANCY child_descriptor.y
 #define CHILD_DESCRIPTOR_NEEDS_REFRESH child_descriptor.z
-#define CHILD_DESCRIPTOR_OCCUPIED_AT(child_shift) (((child_descriptor.x) & (1 << child_shift)) != 0)
+#define CHILD_DESCRIPTOR_OCCUPIED_AT(child_shift) ((uint(child_descriptor.y) & uint(1 << child_shift)) != 0u)
+#define CHILD_DESCRIPTOR_HAS_CHILD_AT(child_shift) ((uint(child_descriptor.x) & uint(1 << child_shift)) != 0u)
 
 #include "shared.glsl"
 
@@ -35,7 +36,7 @@ vec2 intersectAABB(vec3 origin, vec3 dir, vec4 box) {
     float t_max = min(min(t2.x, t2.y), t2.z);
     return vec2(t_min, t_max);
 }
-uint MaskLocationNthOne(uint mask, uint location) {
+uint MaskLocationNthOne(uint8_t mask, uint location) {
     return bitCount(mask & ((1 << location) - 1));
 }
 
@@ -103,9 +104,9 @@ void esvo(Ray ray) {
     while(iter < MAX_RAYCAST_ITERATIONS) {
         iter++;
         // Fetch child descriptor unless it is already valid.
-        if (CHILD_DESCRIPTOR_NEEDS_REFRESH != 0) {
+        if (CHILD_DESCRIPTOR_NEEDS_REFRESH != 0u) {
             child_descriptor = unpack8(Chunks_values[parent]);
-            CHILD_DESCRIPTOR_NEEDS_REFRESH = uint8_t(0);
+            CHILD_DESCRIPTOR_NEEDS_REFRESH = uint8_t(0u);
         }
 
         
@@ -141,7 +142,7 @@ void esvo(Ray ray) {
 
             if (t_min <= tv_max) {
                 // Terminate if the corresponding bit in the non-leaf mask is not set.
-                if (!CHILD_DESCRIPTOR_OCCUPIED_AT(child_shift))
+                if (!CHILD_DESCRIPTOR_HAS_CHILD_AT(child_shift))
                     break;
 
 
@@ -160,7 +161,7 @@ void esvo(Ray ray) {
                 h = tc_max;
 
                 // Find child descriptor corresponding to the current voxel.
-                parent = Chunks_values[parent + MaskLocationNthOne(CHILD_DESCRIPTOR_CHLILDMASK, child_shift)];
+                parent = Chunks_values[parent + MaskLocationNthOne(CHILD_DESCRIPTOR_CHLILDMASK, child_shift) + 1];
 
 
                 // Select child voxel that the ray enters first.
@@ -232,7 +233,7 @@ void esvo(Ray ray) {
                 stack_len = 0;
                 scale = CAST_STACK_DEPTH - 1;
                 scale_exp2 = 0.5;
-                parent = 0;
+                parent = gl_InstanceCustomIndexEXT;
                 t_max = t_max_original;
                 pos = vec3(1.0f, 1.0f, 1.0f);
                 idx = 0;
@@ -277,6 +278,6 @@ void main()
 {
     Ray ray;
     ray.origin = gl_WorldRayOriginEXT - gl_ObjectToWorldEXT[3] + vec3(1,1,1);
-    ray.dir = gl_WorldRayDirectionEXT;
+    ray.dir = gl_WorldRayDirectionEXT * 10;
     esvo(ray);
 }

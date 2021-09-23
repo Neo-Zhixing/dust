@@ -184,8 +184,7 @@ impl<'a> GridAccessorMut<'a> {
                 return occupancy_mask == 0xFF;
             }
         }
-        let avg = header.occupancy_mask.count_ones() >= 4;
-        avg
+        header.occupancy_mask != 0
     }
 
     // Change the childmask of the node located at node_handle
