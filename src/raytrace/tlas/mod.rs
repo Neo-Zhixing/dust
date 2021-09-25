@@ -612,12 +612,13 @@ fn tlas_update(
                 &[vk::SubmitInfo::builder()
                     .command_buffers(&[command_buffer])
                     .build()],
-                state.fence,
+                fence,
             )
             .unwrap();
 
         println!("We did it");
         state.command_buffer = command_buffer;
         state.tlas = tlas;
+        state.fence = fence;
     }
 }

@@ -10,6 +10,7 @@ mod device_info;
 mod queues;
 mod raytrace;
 mod util;
+mod fps_counter;
 
 use bevy::render2::RenderApp;
 use device_info::DeviceInfo;
@@ -37,7 +38,9 @@ impl Plugin for DustPlugin {
             .add_plugin(bevy::pbr2::PbrPlugin::default());
 
         self.extract(app, state);
-        app.add_plugin(raytrace::RaytracePlugin::default());
+        app.add_plugin(raytrace::RaytracePlugin::default())
+            .insert_resource(fps_counter::FPSCounter::default())
+            .add_system(fps_counter::fps_counter);
     }
 }
 impl DustPlugin {

@@ -36,14 +36,14 @@ impl AssetLoader for VoxLoader {
             println!("started loading vox");
             let scene = dot_vox::load_bytes(bytes).map_err(|err| anyhow::Error::msg(err))?;
             println!("end loading vox");
-            let model = &scene.models[0];
+            let model = &scene.models[128];
             let size = model.size.x.max(model.size.y).max(model.size.z);
             let size = crate::util::next_pow2_sqrt(size) as u8;
             let mut svdag = Svdag::new(self.block_allocator.clone(), 1);
             let mut grid = svdag.get_grid_accessor_mut(size, 0);
 
             for voxel in model.voxels.iter() {
-                grid.set(voxel.x as u32, voxel.y as u32, voxel.z as u32, true);
+                grid.set(voxel.x as u32, voxel.z as u32, voxel.y as u32, true);
             }
 
             svdag.flush_all();

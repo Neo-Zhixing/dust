@@ -268,7 +268,7 @@ void esvo(Ray ray) {
     res.childIdx = idx ^ octant_mask ^ 7;
     res.stackPtr = scale;
 */
-    numIterations = float(iter) / 10;
+    numIterations = float(iter) / 100;
 
         reportIntersectionEXT(1000, 0);
 }

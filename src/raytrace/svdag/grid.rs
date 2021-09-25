@@ -117,8 +117,7 @@ impl<'a> GridAccessorMut<'a> {
         }
         if gridsize <= 1 {
             // is leaf node
-            let is_none = handle.is_none();
-            if std::intrinsics::unlikely(is_none) {
+            if std::intrinsics::unlikely(handle.is_none()) {
                 // This happens only when gridsize = 2.
                 // TODO: set handle to be something.
                 *handle = self.dag.arena.alloc(1);
