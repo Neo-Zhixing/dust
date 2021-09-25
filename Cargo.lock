@@ -910,8 +910,7 @@ checksum = "bd0c93bb4b0c6d9b77f4435b0ae98c24d17f1c45b2ff844c6151a07256ca923b"
 [[package]]
 name = "dot_vox"
 version = "4.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "83c18405ef54de0398b77a3ec8394d3a1639e7bf060e1385201e8db40c44ab41"
+source = "git+https://github.com/Sixmorphugus/dot_vox?branch=scenegraph#25fdd77ce41cb261b83ac0ed14620590f3ef977c"
 dependencies = [
  "byteorder",
  "lazy_static",

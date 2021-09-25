@@ -189,13 +189,16 @@ impl Node for RaytracingNode {
         render_context: &mut bevy::render2::renderer::RenderContext,
         world: &World,
     ) -> Result<(), bevy::render2::render_graph::NodeRunError> {
+        let tlas_state = world.get_resource::<TlasState>().unwrap();
+        if tlas_state.tlas == vk::AccelerationStructureKHR::null() {
+            return Ok(());
+        }
         let raytracing_pipeline_loader = world
             .get_resource::<ash::extensions::khr::RayTracingPipeline>()
             .unwrap();
         let device = world.get_resource::<ash::Device>().unwrap();
         let view_meta = world.get_resource::<ViewMeta>().unwrap();
         let ray_shaders = world.get_resource::<RayShaders>().unwrap();
-        let tlas_state = world.get_resource::<TlasState>().unwrap();
         let queues = world.get_resource::<Queues>().unwrap();
         let view = graph.get_input_entity(Self::IN_VIEW).unwrap();
         let view = world.get_entity(view).unwrap();
@@ -253,9 +256,9 @@ impl Node for RaytracingNode {
         };
 
         unsafe {
-            let write_desc_set_as_ext = vk::WriteDescriptorSetAccelerationStructureKHR::builder()
-                .acceleration_structures(&[tlas_state.tlas])
-                .build();
+            let mut write_desc_set_as_ext = vk::WriteDescriptorSetAccelerationStructureKHR::default();
+            write_desc_set_as_ext.acceleration_structure_count = 1;
+            write_desc_set_as_ext.p_acceleration_structures = &tlas_state.tlas;
             let mut write_desc_set_as = vk::WriteDescriptorSet::builder()
                 .dst_set(ray_shaders.target_img_desc_set)
                 .dst_binding(2)

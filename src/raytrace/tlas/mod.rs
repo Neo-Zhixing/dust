@@ -47,7 +47,8 @@ pub struct TlasState {
     command_pool: vk::CommandPool,
     command_buffer: vk::CommandBuffer,
     needs_update_next_frame: bool,
-    fence: vk::Fence,
+    have_updates_pending: bool,
+    pub fence: vk::Fence,
 }
 
 fn tlas_setup(app: &mut App) {
@@ -319,6 +320,7 @@ fn tlas_setup(app: &mut App) {
             command_pool,
             command_buffer,
             fence,
+            have_updates_pending: true,
             needs_update_next_frame: false,
         };
         app.insert_resource(tlas_state);
@@ -352,14 +354,17 @@ fn tlas_update(
         .get_mut(render_world);
 
     // Clear the command buffer if the update was completed
-    let mut have_updates_pending = state.command_buffer != vk::CommandBuffer::null();
+    let mut have_updates_pending = state.have_updates_pending;
     if have_updates_pending {
         let updates_finished = unsafe { device.get_fence_status(state.fence).unwrap() };
         if updates_finished {
             unsafe {
                 device.reset_fences(&[state.fence]).unwrap();
-                device.free_command_buffers(state.command_pool, &[state.command_buffer]);
-                state.command_buffer = vk::CommandBuffer::null();
+                state.have_updates_pending = false;
+                have_updates_pending = false;
+                device
+                .reset_command_pool(state.command_pool, vk::CommandPoolResetFlags::empty())
+                .unwrap();
 
                 // Cleanup for Unit Box BLAS
                 if state.unit_box_scratch_buf != vk::Buffer::null() {
@@ -385,7 +390,6 @@ fn tlas_update(
                 if let Some(mem) = state.tlas_scratch_mem.take() {
                     allocator.dealloc(AshMemoryDevice::wrap(&*device), mem);
                 }
-                have_updates_pending = false;
             }
         }
     }
@@ -441,6 +445,25 @@ fn tlas_update(
             }
         })
         .collect();
+    if data.len() == 0 {
+        unsafe {
+            // TODO: figure out a way to delete the AS
+            if state.tlas_buf != vk::Buffer::null() {
+                device.destroy_buffer(state.tlas_buf, None);
+                state.tlas_buf = vk::Buffer::null();
+            }
+            if let Some(mem) = state.tlas_mem.take() {
+                allocator.dealloc(AshMemoryDevice::wrap(&*device), mem);
+            }
+        }
+        debug_assert!(state.tlas_mem.is_none());
+        debug_assert_eq!(state.tlas_buf, vk::Buffer::null());
+        println!("Swapping TLAS, before {:?}, after {:?}", state.tlas, vk::AccelerationStructureKHR::null());
+        state.tlas = vk::AccelerationStructureKHR::null();
+        state.tlas_buf = vk::Buffer::null();
+        state.tlas_mem = None;
+        return;
+    }
     let data_device_addr = unsafe {
         let data_buf = device
             .create_buffer(
@@ -612,24 +635,7 @@ fn tlas_update(
         build_geometry_info.dst_acceleration_structure = tlas;
         build_geometry_info.scratch_data.device_address = scratch_device_address;
 
-        if state.command_buffer == vk::CommandBuffer::null() {
-            let mut command_buffer = vk::CommandBuffer::null();
-            let result = device.fp_v1_0().allocate_command_buffers(
-                device.handle(),
-                &vk::CommandBufferAllocateInfo::builder()
-                    .command_pool(state.command_pool)
-                    .level(vk::CommandBufferLevel::PRIMARY)
-                    .command_buffer_count(1)
-                    .build(),
-                &mut command_buffer,
-            );
-            assert_eq!(result, vk::Result::SUCCESS);
-            state.command_buffer = command_buffer;
-        } else {
-            device
-                .reset_command_pool(state.command_pool, vk::CommandPoolResetFlags::empty())
-                .unwrap();
-        }
+        debug_assert!(state.command_buffer != vk::CommandBuffer::null());
         device
             .begin_command_buffer(
                 state.command_buffer,
@@ -650,7 +656,6 @@ fn tlas_update(
         );
         device.end_command_buffer(state.command_buffer).unwrap();
 
-        device.reset_fences(&[state.fence]).unwrap();
         device
             .queue_submit(
                 queues.compute_queue,
@@ -662,7 +667,6 @@ fn tlas_update(
             .unwrap();
 
         println!("We did it");
-
         /*
         if state.tlas != vk::AccelerationStructureKHR::null() {
             acceleration_structure_loader.destroy_acceleration_structure(state.tlas, None);
@@ -680,8 +684,10 @@ fn tlas_update(
 
         debug_assert!(state.tlas_mem.is_none());
         debug_assert_eq!(state.tlas_buf, vk::Buffer::null());
+        println!("Swapping TLAS, before {:?}, after {:?}", state.tlas, tlas);
         state.tlas = tlas;
         state.tlas_buf = as_buf;
         state.tlas_mem = Some(as_mem);
+        state.have_updates_pending = true;
     }
 }
