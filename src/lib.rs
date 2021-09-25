@@ -7,10 +7,10 @@
 #![feature(core_intrinsics)]
 
 mod device_info;
+mod fps_counter;
 mod queues;
 mod raytrace;
 mod util;
-mod fps_counter;
 
 use bevy::render2::RenderApp;
 use device_info::DeviceInfo;

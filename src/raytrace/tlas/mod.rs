@@ -32,10 +32,18 @@ impl Plugin for TlasPlugin {
 
 pub struct TlasState {
     pub tlas: vk::AccelerationStructureKHR,
+    tlas_buf: vk::Buffer,
+    tlas_mem: Option<crate::MemoryBlock>,
+    tlas_data_buf: vk::Buffer,
+    tlas_data_mem: Option<crate::MemoryBlock>,
+    tlas_scratch_buf: vk::Buffer,
+    tlas_scratch_mem: Option<crate::MemoryBlock>,
     unit_box_as: vk::AccelerationStructureKHR,
     unit_box_as_buf: vk::Buffer,
     unit_box_as_mem: crate::MemoryBlock,
     unit_box_as_device_address: u64,
+    unit_box_scratch_mem: Option<crate::MemoryBlock>,
+    unit_box_scratch_buf: vk::Buffer,
     command_pool: vk::CommandPool,
     command_buffer: vk::CommandBuffer,
     needs_update_next_frame: bool,
@@ -294,18 +302,20 @@ fn tlas_setup(app: &mut App) {
             )
             .unwrap();
 
-        // Free memory
-        device.destroy_buffer(scratch_buf, None);
-        allocator.dealloc(AshMemoryDevice::wrap(&device), scratch_mem);
-        device.destroy_buffer(unit_box_buffer, None);
-        allocator.dealloc(AshMemoryDevice::wrap(&device), unit_box_mem);
-
         let tlas_state = TlasState {
             tlas: vk::AccelerationStructureKHR::null(),
+            tlas_buf: vk::Buffer::null(),
+            tlas_mem: None,
+            tlas_data_buf: vk::Buffer::null(),
+            tlas_data_mem: None,
+            tlas_scratch_buf: vk::Buffer::null(),
+            tlas_scratch_mem: None,
             unit_box_as,
             unit_box_as_buf,
             unit_box_as_mem,
             unit_box_as_device_address,
+            unit_box_scratch_buf: scratch_buf,
+            unit_box_scratch_mem: Some(scratch_mem),
             command_pool,
             command_buffer,
             fence,
@@ -321,7 +331,11 @@ fn tlas_update(
     mut voxel_model_events: EventReader<AssetEvent<crate::VoxelModel>>,
     anything_changed_query: Query<
         (&GlobalTransform, &Raytraced, &Handle<crate::VoxelModel>),
-        Or<(Changed<GlobalTransform>, Changed<Raytraced>, Changed<Handle<crate::VoxelModel>>)>,
+        Or<(
+            Changed<GlobalTransform>,
+            Changed<Raytraced>,
+            Changed<Handle<crate::VoxelModel>>,
+        )>,
     >,
     entities_query: Query<(&GlobalTransform, &Raytraced, &Handle<crate::VoxelModel>)>,
 ) {
@@ -346,12 +360,38 @@ fn tlas_update(
                 device.reset_fences(&[state.fence]).unwrap();
                 device.free_command_buffers(state.command_pool, &[state.command_buffer]);
                 state.command_buffer = vk::CommandBuffer::null();
+
+                // Cleanup for Unit Box BLAS
+                if state.unit_box_scratch_buf != vk::Buffer::null() {
+                    device.destroy_buffer(state.unit_box_scratch_buf, None);
+                    state.unit_box_scratch_buf = vk::Buffer::null();
+                }
+                if let Some(mem) = state.unit_box_scratch_mem.take() {
+                    allocator.dealloc(AshMemoryDevice::wrap(&*device), mem);
+                }
+
+                // Cleanup for TLAS
+                if state.tlas_data_buf != vk::Buffer::null() {
+                    device.destroy_buffer(state.tlas_data_buf, None);
+                    state.tlas_data_buf = vk::Buffer::null();
+                }
+                if let Some(mem) = state.tlas_data_mem.take() {
+                    allocator.dealloc(AshMemoryDevice::wrap(&*device), mem);
+                }
+                if state.tlas_scratch_buf != vk::Buffer::null() {
+                    device.destroy_buffer(state.tlas_scratch_buf, None);
+                    state.tlas_scratch_buf = vk::Buffer::null();
+                }
+                if let Some(mem) = state.tlas_scratch_mem.take() {
+                    allocator.dealloc(AshMemoryDevice::wrap(&*device), mem);
+                }
                 have_updates_pending = false;
             }
         }
     }
 
-    let have_updates_this_frame = !anything_changed_query.is_empty() || voxel_model_events.iter().next().is_some(); // have updates this frame
+    let have_updates_this_frame =
+        !anything_changed_query.is_empty() || voxel_model_events.iter().next().is_some(); // have updates this frame
     let have_updates_last_frame = state.needs_update_next_frame;
     let need_to_do_updates = have_updates_last_frame | have_updates_this_frame;
     if !need_to_do_updates {
@@ -389,7 +429,8 @@ fn tlas_update(
                     transform: vk::TransformMatrixKHR {
                         matrix: MaybeUninit::uninit().assume_init(),
                     },
-                    instance_custom_index_and_mask: ((mask as u32) << 24) | (custom_index & 0xFFFFFF),
+                    instance_custom_index_and_mask: ((mask as u32) << 24)
+                        | (custom_index & 0xFFFFFF),
                     instance_shader_binding_table_record_offset_and_flags: 0,
                     acceleration_structure_reference: vk::AccelerationStructureReferenceKHR {
                         device_handle: state.unit_box_as_device_address,
@@ -439,6 +480,10 @@ fn tlas_update(
                 ),
             )
             .unwrap();
+        debug_assert_eq!(state.tlas_data_buf, vk::Buffer::null());
+        debug_assert!(state.tlas_data_mem.is_none());
+        state.tlas_data_buf = data_buf;
+        state.tlas_data_mem = Some(data_buf_mem);
         device.get_buffer_device_address(
             &vk::BufferDeviceAddressInfo::builder()
                 .buffer(data_buf)
@@ -516,6 +561,11 @@ fn tlas_update(
         let scratch_device_address =
             crate::util::round_up(scratch_device_address, scratch_alignment);
 
+        debug_assert_eq!(state.tlas_scratch_buf, vk::Buffer::null());
+        debug_assert!(state.tlas_scratch_mem.is_none());
+        state.tlas_scratch_buf = scratch_buf;
+        state.tlas_scratch_mem = Some(scratch_mem);
+
         let as_buf = device
             .create_buffer(
                 &vk::BufferCreateInfo::builder()
@@ -559,37 +609,37 @@ fn tlas_update(
                 None,
             )
             .unwrap();
-        let tlas_device_address = acceleration_structure_loader
-            .get_acceleration_structure_device_address(
-                &vk::AccelerationStructureDeviceAddressInfoKHR::builder()
-                    .acceleration_structure(tlas)
-                    .build(),
-            );
         build_geometry_info.dst_acceleration_structure = tlas;
         build_geometry_info.scratch_data.device_address = scratch_device_address;
 
-        let mut command_buffer = vk::CommandBuffer::null();
-
-        let result = device.fp_v1_0().allocate_command_buffers(
-            device.handle(),
-            &vk::CommandBufferAllocateInfo::builder()
-                .command_pool(state.command_pool)
-                .level(vk::CommandBufferLevel::PRIMARY)
-                .command_buffer_count(1)
-                .build(),
-            &mut command_buffer,
-        );
-        assert_eq!(result, vk::Result::SUCCESS);
+        if state.command_buffer == vk::CommandBuffer::null() {
+            let mut command_buffer = vk::CommandBuffer::null();
+            let result = device.fp_v1_0().allocate_command_buffers(
+                device.handle(),
+                &vk::CommandBufferAllocateInfo::builder()
+                    .command_pool(state.command_pool)
+                    .level(vk::CommandBufferLevel::PRIMARY)
+                    .command_buffer_count(1)
+                    .build(),
+                &mut command_buffer,
+            );
+            assert_eq!(result, vk::Result::SUCCESS);
+            state.command_buffer = command_buffer;
+        } else {
+            device
+                .reset_command_pool(state.command_pool, vk::CommandPoolResetFlags::empty())
+                .unwrap();
+        }
         device
             .begin_command_buffer(
-                command_buffer,
+                state.command_buffer,
                 &vk::CommandBufferBeginInfo::builder()
                     .flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT)
                     .build(),
             )
             .unwrap();
         acceleration_structure_loader.cmd_build_acceleration_structures(
-            command_buffer,
+            state.command_buffer,
             &[build_geometry_info],
             &[&[vk::AccelerationStructureBuildRangeInfoKHR {
                 primitive_count: data.len() as u32,
@@ -598,27 +648,40 @@ fn tlas_update(
                 transform_offset: 0,
             }]],
         );
-        device.end_command_buffer(command_buffer).unwrap();
+        device.end_command_buffer(state.command_buffer).unwrap();
 
-        let fence = device
-            .create_fence(
-                &vk::FenceCreateInfo::builder().flags(vk::FenceCreateFlags::default()),
-                None,
-            )
-            .unwrap();
+        device.reset_fences(&[state.fence]).unwrap();
         device
             .queue_submit(
                 queues.compute_queue,
                 &[vk::SubmitInfo::builder()
-                    .command_buffers(&[command_buffer])
+                    .command_buffers(&[state.command_buffer])
                     .build()],
-                fence,
+                state.fence,
             )
             .unwrap();
 
         println!("We did it");
-        state.command_buffer = command_buffer;
+
+        /*
+        if state.tlas != vk::AccelerationStructureKHR::null() {
+            acceleration_structure_loader.destroy_acceleration_structure(state.tlas, None);
+            state.tlas = vk::AccelerationStructureKHR::null();
+        }
+        */
+        // TODO: figure out a way to delete the AS
+        if state.tlas_buf != vk::Buffer::null() {
+            device.destroy_buffer(state.tlas_buf, None);
+            state.tlas_buf = vk::Buffer::null();
+        }
+        if let Some(mem) = state.tlas_mem.take() {
+            allocator.dealloc(AshMemoryDevice::wrap(&*device), mem);
+        }
+
+        debug_assert!(state.tlas_mem.is_none());
+        debug_assert_eq!(state.tlas_buf, vk::Buffer::null());
         state.tlas = tlas;
-        state.fence = fence;
+        state.tlas_buf = as_buf;
+        state.tlas_mem = Some(as_mem);
     }
 }

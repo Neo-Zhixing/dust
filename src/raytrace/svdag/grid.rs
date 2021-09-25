@@ -263,7 +263,7 @@ impl Svdag {
         GridAccessor {
             dag: self,
             size,
-            root_index: frame
+            root_index: frame,
         }
     }
     pub fn get_grid_accessor_mut(&mut self, size: u8, frame: usize) -> GridAccessorMut {
