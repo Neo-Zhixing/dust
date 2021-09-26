@@ -11,6 +11,7 @@ pub struct IntegratedBlockAllocator {
     bind_transfer_queue: vk::Queue,
     memtype: u32,
     pub buffer: vk::Buffer,
+    buffer_size: u64,
 
     current_offset: AtomicU64,
     free_offsets: SegQueue<u64>,
@@ -29,8 +30,9 @@ impl IntegratedBlockAllocator {
             create_info.graphics_queue_family,
             create_info.bind_transfer_queue_family,
         ];
+        let buffer_size = create_info.max_storage_buffer_size;
         let mut buffer_create_info = vk::BufferCreateInfo::builder()
-            .size(create_info.max_storage_buffer_size)
+            .size(buffer_size)
             .usage(vk::BufferUsageFlags::STORAGE_BUFFER)
             .flags(vk::BufferCreateFlags::SPARSE_BINDING | vk::BufferCreateFlags::SPARSE_RESIDENCY);
 
@@ -55,6 +57,7 @@ impl IntegratedBlockAllocator {
             free_offsets: SegQueue::new(),
             block_size: create_info.block_size,
             device,
+            buffer_size,
         }
     }
 }
@@ -131,6 +134,9 @@ impl BlockAllocator for IntegratedBlockAllocator {
     }
     fn get_buffer(&self) -> vk::Buffer {
         self.buffer
+    }
+    fn get_device_buffer_size(&self) -> u64 {
+        self.buffer_size
     }
 }
 

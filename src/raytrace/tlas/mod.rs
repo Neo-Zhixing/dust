@@ -363,8 +363,8 @@ fn tlas_update(
                 state.have_updates_pending = false;
                 have_updates_pending = false;
                 device
-                .reset_command_pool(state.command_pool, vk::CommandPoolResetFlags::empty())
-                .unwrap();
+                    .reset_command_pool(state.command_pool, vk::CommandPoolResetFlags::empty())
+                    .unwrap();
 
                 // Cleanup for Unit Box BLAS
                 if state.unit_box_scratch_buf != vk::Buffer::null() {
@@ -458,7 +458,11 @@ fn tlas_update(
         }
         debug_assert!(state.tlas_mem.is_none());
         debug_assert_eq!(state.tlas_buf, vk::Buffer::null());
-        println!("Swapping TLAS, before {:?}, after {:?}", state.tlas, vk::AccelerationStructureKHR::null());
+        println!(
+            "Swapping TLAS, before {:?}, after {:?}",
+            state.tlas,
+            vk::AccelerationStructureKHR::null()
+        );
         state.tlas = vk::AccelerationStructureKHR::null();
         state.tlas_buf = vk::Buffer::null();
         state.tlas_mem = None;

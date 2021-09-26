@@ -47,6 +47,7 @@ pub trait BlockAllocator: Send + Sync {
     fn can_flush(&self) -> bool;
 
     fn get_blocksize(&self) -> u64;
+    fn get_device_buffer_size(&self) -> u64;
     fn get_buffer(&self) -> vk::Buffer;
 }
 

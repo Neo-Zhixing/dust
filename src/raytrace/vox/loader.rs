@@ -43,7 +43,7 @@ impl AssetLoader for VoxLoader {
             let mut translation_min = Vec3 {
                 x: i32::MAX,
                 y: i32::MAX,
-                z: i32::MAX
+                z: i32::MAX,
             };
             let mut translation_max = Vec3 {
                 x: i32::MIN,
@@ -51,13 +51,11 @@ impl AssetLoader for VoxLoader {
                 z: i32::MIN,
             };
 
-            
             let offset = Vec3 {
                 x: 1024,
                 y: 1024,
-                z: 1024
+                z: 1024,
             };
-
 
             self.traverse(&scene, |model_id, translation, rotation| {
                 /*
@@ -73,7 +71,7 @@ impl AssetLoader for VoxLoader {
                 let half_size = Vec3 {
                     x: model.size.x as i32,
                     y: model.size.y as i32,
-                    z: model.size.z as i32
+                    z: model.size.z as i32,
                 } / 2;
                 for voxel in model.voxels.iter() {
                     let local_position = Vec3 {
@@ -81,11 +79,17 @@ impl AssetLoader for VoxLoader {
                         y: voxel.y as i32,
                         z: voxel.z as i32,
                     } - half_size;
-                    let location = translation + offset + (rotation * (local_position * 2 + Vec3::ONE)) / 2;
+                    let location =
+                        translation + offset + (rotation * (local_position * 2 + Vec3::ONE)) / 2;
                     assert!(0 <= location.x && location.x < 2048);
                     assert!(0 <= location.y && location.y < 2048);
                     assert!(0 <= location.z && location.z < 2048);
-                    grid.set(location.x as u32, location.z as u32, location.y as u32, true);
+                    grid.set(
+                        location.x as u32,
+                        location.z as u32,
+                        location.y as u32,
+                        true,
+                    );
                 }
             });
             svdag.flush_all();
@@ -100,13 +104,29 @@ impl AssetLoader for VoxLoader {
 }
 
 impl VoxLoader {
-    fn traverse<F>(&self, scene: &DotVoxData, mut callback: F)   where F: FnMut(u32, Vec3, Rotation) {
+    fn traverse<F>(&self, scene: &DotVoxData, mut callback: F)
+    where
+        F: FnMut(u32, Vec3, Rotation),
+    {
         self.traverse_recursive(scene, 0, Vec3::ZERO, Rotation::IDENTITY, &mut callback)
     }
-    fn traverse_recursive<F>(&self, scene: &DotVoxData, node: u32, mut translation: Vec3, mut rotation: Rotation, callback: &mut F)  where F: FnMut(u32, Vec3, Rotation) {
+    fn traverse_recursive<F>(
+        &self,
+        scene: &DotVoxData,
+        node: u32,
+        mut translation: Vec3,
+        mut rotation: Rotation,
+        callback: &mut F,
+    ) where
+        F: FnMut(u32, Vec3, Rotation),
+    {
         let node = &scene.scene[node as usize];
         match node {
-            SceneNode::Transform {attributes, frames, child} => {
+            SceneNode::Transform {
+                attributes,
+                frames,
+                child,
+            } => {
                 if frames.len() != 1 {
                     unimplemented!("Multiple frame in transform node");
                 }
@@ -125,13 +145,16 @@ impl VoxLoader {
                 }
 
                 self.traverse_recursive(scene, *child, translation, rotation, callback);
-            },
-            SceneNode::Group {attributes, children} => {
+            }
+            SceneNode::Group {
+                attributes,
+                children,
+            } => {
                 for &i in children {
                     self.traverse_recursive(scene, i, translation, rotation, callback);
                 }
-            },
-            SceneNode::Shape {attributes, models} => {
+            }
+            SceneNode::Shape { attributes, models } => {
                 // Shape nodes are leafs and correspond to models
                 if models.len() != 1 {
                     unimplemented!("Multiple shape models in Shape node");
@@ -142,7 +165,6 @@ impl VoxLoader {
         }
     }
 }
-
 
 #[derive(Clone, Copy)]
 struct Rotation(u8);
@@ -158,17 +180,15 @@ struct Vec3 {
     pub z: i32,
 }
 impl Vec3 {
-    const ZERO: Vec3 = Vec3{ x: 0, y: 0, z: 0 };
-    const ONE: Vec3 = Vec3{ x: 1, y: 1, z: 1 };
+    const ZERO: Vec3 = Vec3 { x: 0, y: 0, z: 0 };
+    const ONE: Vec3 = Vec3 { x: 1, y: 1, z: 1 };
     fn as_slice(&self) -> &[i32; 3] {
-        unsafe {
-            std::mem::transmute(self)
-        }
+        unsafe { std::mem::transmute(self) }
     }
 }
 impl std::ops::Add<Vec3> for Vec3 {
     type Output = Vec3;
-    
+
     fn add(self, rhs: Vec3) -> Vec3 {
         Vec3 {
             x: self.x + rhs.x,
@@ -186,7 +206,7 @@ impl std::ops::AddAssign<Vec3> for Vec3 {
 }
 impl std::ops::Sub<Vec3> for Vec3 {
     type Output = Vec3;
-    
+
     fn sub(self, rhs: Vec3) -> Vec3 {
         Vec3 {
             x: self.x - rhs.x,
@@ -245,6 +265,5 @@ impl std::ops::Mul<Vec3> for Rotation {
             y: rhs.as_slice()[index_nz2 as usize] * row_2_sign,
             z: rhs.as_slice()[index_nz3 as usize] * row_3_sign,
         }
-
     }
 }

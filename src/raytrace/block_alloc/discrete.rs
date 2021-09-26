@@ -10,7 +10,6 @@ pub struct DiscreteBlock {
     system_buf: vk::Buffer,
     device_mem: vk::DeviceMemory,
     offset: u64,
-    sparse_binding_completion_semaphore: vk::Semaphore,
 }
 
 pub struct DiscreteBlockAllocator {
@@ -18,6 +17,7 @@ pub struct DiscreteBlockAllocator {
     block_size: u64,
     bind_transfer_queue: vk::Queue,
     pub device_buffer: vk::Buffer,
+    device_buffer_size: u64,
     device_memtype: u32,
 
     current_offset: AtomicU64,
@@ -41,11 +41,10 @@ impl DiscreteBlockAllocator {
             create_info.graphics_queue_family,
             create_info.bind_transfer_queue_family,
         ];
+        let device_buffer_size =
+            (create_info.max_storage_buffer_size / create_info.block_size) * create_info.block_size;
         let mut buffer_create_info = vk::BufferCreateInfo::builder()
-            .size(
-                (create_info.max_storage_buffer_size / create_info.block_size)
-                    * create_info.block_size,
-            )
+            .size(device_buffer_size)
             .usage(vk::BufferUsageFlags::STORAGE_BUFFER | vk::BufferUsageFlags::TRANSFER_DST)
             .flags(vk::BufferCreateFlags::SPARSE_BINDING | vk::BufferCreateFlags::SPARSE_RESIDENCY);
 
@@ -104,6 +103,7 @@ impl DiscreteBlockAllocator {
             copy_completion_fence,
             memory_properties: memory_properties.clone(),
             device,
+            device_buffer_size,
         }
     }
 }
@@ -159,19 +159,11 @@ impl BlockAllocator for DiscreteBlockAllocator {
             )
             .map_err(super::AllocError::from)?;
 
-        let sparse_binding_completion_semaphore = self
-            .device
-            .create_semaphore(
-                &vk::SemaphoreCreateInfo::builder().push_next(
-                    &mut vk::SemaphoreTypeCreateInfo::builder()
-                        .semaphore_type(vk::SemaphoreType::TIMELINE)
-                        .initial_value(0)
-                        .build(),
-                ),
-                None,
-            )
-            .unwrap();
         // Immediately submit the request
+        let fence = self
+            .device
+            .create_fence(&vk::FenceCreateInfo::default(), None)
+            .unwrap();
         self.device
             .queue_bind_sparse(
                 self.bind_transfer_queue,
@@ -186,23 +178,21 @@ impl BlockAllocator for DiscreteBlockAllocator {
                             flags: vk::SparseMemoryBindFlags::empty(),
                         }])
                         .build()])
-                    .signal_semaphores(&[sparse_binding_completion_semaphore])
-                    .push_next(
-                        &mut vk::TimelineSemaphoreSubmitInfo::builder()
-                            .signal_semaphore_values(&[1])
-                            .build(),
-                    )
                     .build()],
-                vk::Fence::null(),
+                fence,
             )
             .map_err(super::AllocError::from)
             .unwrap();
+        println!("Sparse Binded");
+        self.device
+            .wait_for_fences(&[fence], true, u64::MAX)
+            .unwrap();
+        self.device.destroy_fence(fence, None);
         let block = DiscreteBlock {
             system_mem,
             device_mem,
             system_buf,
             offset: resource_offset,
-            sparse_binding_completion_semaphore,
         };
         let block = Box::new(block);
         let allocation = BlockAllocation(Box::into_raw(block) as u64);
@@ -216,15 +206,11 @@ impl BlockAllocator for DiscreteBlockAllocator {
         self.device.destroy_buffer(block.system_buf, None);
         self.device.free_memory(block.system_mem, None);
         self.device.free_memory(block.device_mem, None);
-        self.device
-            .destroy_semaphore(block.sparse_binding_completion_semaphore, None);
         self.free_offsets.push(block.offset);
         std::mem::forget(allocation);
     }
 
     unsafe fn flush(&self, ranges: &mut dyn Iterator<Item = (&BlockAllocation, Range<u32>)>) {
-        let mut semaphores: Vec<vk::Semaphore> = Vec::with_capacity(ranges.size_hint().0);
-
         self.device
             .reset_command_pool(self.command_pool, vk::CommandPoolResetFlags::empty())
             .unwrap();
@@ -242,7 +228,6 @@ impl BlockAllocator for DiscreteBlockAllocator {
             let block = block_allocation.0 as *const DiscreteBlock;
             let block = &*block;
             let location = block.offset * self.block_size as u64 + range.start as u64;
-            semaphores.push(block.sparse_binding_completion_semaphore);
 
             self.device.cmd_copy_buffer(
                 self.command_buffer,
@@ -256,9 +241,6 @@ impl BlockAllocator for DiscreteBlockAllocator {
             );
         }
         self.device.end_command_buffer(self.command_buffer).unwrap();
-        assert!(semaphores.len() > 0);
-        let wait_dst_stage_mask = vec![vk::PipelineStageFlags::TRANSFER; semaphores.len()];
-        let wait_semaphore_values = vec![1; semaphores.len()];
 
         self.device
             .reset_fences(&[self.copy_completion_fence])
@@ -266,12 +248,6 @@ impl BlockAllocator for DiscreteBlockAllocator {
         let command_buffers = [self.command_buffer];
         let submit_info = vk::SubmitInfo::builder()
             .command_buffers(&command_buffers)
-            .wait_semaphores(&semaphores)
-            .wait_dst_stage_mask(&wait_dst_stage_mask)
-            .push_next(
-                &mut vk::TimelineSemaphoreSubmitInfo::builder()
-                    .wait_semaphore_values(&wait_semaphore_values),
-            )
             .build();
         self.device
             .queue_submit(
@@ -297,6 +273,9 @@ impl BlockAllocator for DiscreteBlockAllocator {
     }
     fn get_blocksize(&self) -> u64 {
         self.block_size
+    }
+    fn get_device_buffer_size(&self) -> u64 {
+        self.device_buffer_size
     }
     fn get_buffer(&self) -> vk::Buffer {
         self.device_buffer

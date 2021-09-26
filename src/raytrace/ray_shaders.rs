@@ -380,7 +380,7 @@ impl FromWorld for RayShaders {
                     .buffer_info(&[vk::DescriptorBufferInfo::builder()
                         .buffer(block_allocator.get_buffer())
                         .offset(0)
-                        .range(block_allocator.get_blocksize())
+                        .range(block_allocator.get_device_buffer_size())
                         .build()])
                     .build()],
                 &[],

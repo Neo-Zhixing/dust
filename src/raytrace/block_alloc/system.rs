@@ -47,4 +47,7 @@ impl BlockAllocator for SystemBlockAllocator {
     fn get_buffer(&self) -> ash::vk::Buffer {
         unimplemented!()
     }
+    fn get_device_buffer_size(&self) -> u64 {
+        unimplemented!()
+    }
 }

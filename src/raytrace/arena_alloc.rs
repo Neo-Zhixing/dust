@@ -5,7 +5,7 @@ use std::mem::{size_of, ManuallyDrop};
 use std::ptr::NonNull;
 use std::sync::Arc;
 
-pub const BLOCK_MASK_DEGREE: u32 = 24;
+pub const BLOCK_MASK_DEGREE: u32 = 22;
 pub const NUM_SLOTS_IN_BLOCK: u32 = 1 << BLOCK_MASK_DEGREE;
 pub const BLOCK_SIZE: u64 = NUM_SLOTS_IN_BLOCK as u64 * 4;
 pub const BLOCK_MASK: u32 = NUM_SLOTS_IN_BLOCK - 1;

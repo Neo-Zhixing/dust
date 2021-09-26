@@ -256,7 +256,8 @@ impl Node for RaytracingNode {
         };
 
         unsafe {
-            let mut write_desc_set_as_ext = vk::WriteDescriptorSetAccelerationStructureKHR::default();
+            let mut write_desc_set_as_ext =
+                vk::WriteDescriptorSetAccelerationStructureKHR::default();
             write_desc_set_as_ext.acceleration_structure_count = 1;
             write_desc_set_as_ext.p_acceleration_structures = &tlas_state.tlas;
             let mut write_desc_set_as = vk::WriteDescriptorSet::builder()
