@@ -72,11 +72,11 @@ fn setup(
     commands
         .spawn()
         .insert(Raytraced {
-            aabb_extent: bevy::math::Vec3::new(1.0, 1.0, 1.0),
+            aabb_extent: bevy::math::Vec3::new(128.0, 128.0, 128.0),
         })
         .insert(scene_handle)
         .insert(GlobalTransform::default())
-        .insert(Transform::from_xyz(0.0, 1.0, 0.0));
+        .insert(Transform::from_xyz(0.0, 0.0, 0.0));
     /*
     commands
         .spawn()

@@ -277,7 +277,7 @@ void esvo(Ray ray) {
 void main()
 {
     Ray ray;
-    ray.origin = gl_WorldRayOriginEXT - gl_ObjectToWorldEXT[3] + vec3(1,1,1);
-    ray.dir = gl_WorldRayDirectionEXT * 10;
+    ray.origin = gl_ObjectRayOriginEXT +  vec3(1,1,1);
+    ray.dir = gl_ObjectRayDirectionEXT * 1000;
     esvo(ray);
 }
