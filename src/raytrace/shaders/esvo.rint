@@ -3,7 +3,7 @@
 #extension GL_EXT_shader_explicit_arithmetic_types_int8 : require
 
 #define CAST_STACK_DEPTH 23
-#define MAX_RAYCAST_ITERATIONS  200
+#define MAX_RAYCAST_ITERATIONS  2000
 #define STACK_HEIGHT 4
 
 
@@ -51,7 +51,7 @@ struct Box {
     float extent;
 };
 
-void esvo(Ray ray) {
+void esvo(Ray ray, float termination_t) {
     uint stack_len = 0;
     //const float epsilon = exp2(-CAST_STACK_DEPTH);
     uint iter = 0;
@@ -209,7 +209,8 @@ void esvo(Ray ray) {
             if (b_step_mask.z) differing_bits |= floatBitsToUint(pos.z) ^ floatBitsToUint(pos.z + scale_exp2);
             uint new_scale = (floatBitsToUint(float(differing_bits)) >> 23) - 127; // position of the highest bit
             if (new_scale >= CAST_STACK_DEPTH) {
-                break;
+                // MISS
+                return;
             }
             uint backoff = new_scale - scale;
             scale = new_scale;
@@ -243,14 +244,6 @@ void esvo(Ray ray) {
             }
         }
     }
-
-
-
-    
-    // Indicate miss if we are outside the octree.
-    if (scale >= CAST_STACK_DEPTH || iter > MAX_RAYCAST_ITERATIONS) {
-        t_min = 2.0f;
-    }
     // Undo mirroring of the coordinate system.
 /*
     if ((octant_mask & 4) == 0) pos.x = 3.0f - scale_exp2 - pos.x;
@@ -268,16 +261,27 @@ void esvo(Ray ray) {
     res.childIdx = idx ^ octant_mask ^ 7;
     res.stackPtr = scale;
 */
-    numIterations = float(iter) / 100;
+    numIterations = float(iter) / 150;
 
-        reportIntersectionEXT(1000, 0);
+    // point of landing  = t_min * ray.dir = t_min * gl_ObjectRayDirectionEXT * a
+    // point of landing = report * gl_ObjectRayDirectionEXT
+    // report = t_min * a
+    // TODO: is it better to recalculate termination_t here?
+    reportIntersectionEXT(t_min * termination_t, 0);
 }
 
 
 void main()
 {
     Ray ray;
-    ray.origin = gl_ObjectRayOriginEXT +  vec3(1,1,1);
-    ray.dir = gl_ObjectRayDirectionEXT * 1000;
-    esvo(ray);
+    ray.origin = gl_ObjectRayOriginEXT + vec3(1,1,1);
+    // gl_ObjectRayDirectionEXT * t_max is at the outer edge.
+    // We want ray * 1 be at the outer edge.
+    // gl_ObjectRayDirectionEXT * t_max = ray * 1
+    // gl_ObjectRayDirectionEXT = ray / t_max
+
+
+    float t_max = intersectAABB(ray.origin, gl_ObjectRayDirectionEXT, vec4(1,1,1,1)).y;
+    ray.dir = gl_ObjectRayDirectionEXT * t_max;
+    esvo(ray, t_max);
 }
