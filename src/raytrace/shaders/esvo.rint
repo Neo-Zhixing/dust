@@ -18,7 +18,7 @@
 layout(set = 0, binding = 3) readonly buffer Chunks {
     uint Chunks_values[];
 };
-hitAttributeEXT float numIterations;
+hitAttributeEXT HitAttributes hitAttributes;
 struct StackItem {
     uint parent;
     float t_max;
@@ -50,6 +50,14 @@ struct Box {
     vec3 origin;
     float extent;
 };
+
+
+vec3 cubed_normalize(vec3 dir) {
+    vec3 dir_abs = abs(dir);
+    float max_element = max(dir_abs.x, max(dir_abs.y, dir_abs.z));
+    return -sign(dir) * step(max_element, dir_abs);
+}
+
 
 void esvo(Ray ray, float termination_t) {
     uint stack_len = 0;
@@ -245,11 +253,11 @@ void esvo(Ray ray, float termination_t) {
         }
     }
     // Undo mirroring of the coordinate system.
-/*
-    if ((octant_mask & 4) == 0) pos.x = 3.0f - scale_exp2 - pos.x;
-    if ((octant_mask & 2) == 0) pos.y = 3.0f - scale_exp2 - pos.y;
-    if ((octant_mask & 1) == 0) pos.z = 3.0f - scale_exp2 - pos.z;
-*/
+
+    if ((octant_mask & 4) != 0) pos.x = 3.0f - scale_exp2 - pos.x;
+    if ((octant_mask & 2) != 0) pos.y = 3.0f - scale_exp2 - pos.y;
+    if ((octant_mask & 1) != 0) pos.z = 3.0f - scale_exp2 - pos.z;
+
     // Output results.
 /*
     res.t = t_min;
@@ -261,7 +269,11 @@ void esvo(Ray ray, float termination_t) {
     res.childIdx = idx ^ octant_mask ^ 7;
     res.stackPtr = scale;
 */
-    numIterations = float(iter) / 150;
+    vec3 hitPosition = ray.origin + t_min * ray.dir;
+    vec3 voxelCenter = pos + scale_exp2 * 0.5;
+
+    hitAttributes.numIterations = iter;
+    hitAttributes.normal = cubed_normalize(normalize(hitPosition - voxelCenter));
 
     // point of landing  = t_min * ray.dir = t_min * gl_ObjectRayDirectionEXT * a
     // point of landing = report * gl_ObjectRayDirectionEXT

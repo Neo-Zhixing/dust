@@ -28,12 +28,12 @@ fn setup(
     let scene_handle: Handle<dust_new::VoxelModel> = asset_server.load("castle.vox");
 
     commands.spawn_bundle(PbrBundle {
-        mesh: meshes.add(Mesh::from(shape::Cube { size: 1.0 })),
+        mesh: meshes.add(Mesh::from(shape::Torus::default())),
         material: materials.add(StandardMaterial {
             base_color: Color::PINK,
             ..Default::default()
         }),
-        transform: Transform::from_xyz(0.5, 0.5, 0.5),
+        transform: Transform::from_xyz(0.5, 100.0, 0.5),
         ..Default::default()
     });
 
