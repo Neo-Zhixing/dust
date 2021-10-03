@@ -26,6 +26,7 @@ fn setup(
     asset_server: Res<AssetServer>,
 ) {
     let scene_handle: Handle<dust_new::VoxelModel> = asset_server.load("castle.vox");
+    let watertank_handle: Handle<dust_new::VoxelModel> = asset_server.load("water_tank.vox");
 
     commands.spawn_bundle(PbrBundle {
         mesh: meshes.add(Mesh::from(shape::Torus::default())),
@@ -33,7 +34,7 @@ fn setup(
             base_color: Color::PINK,
             ..Default::default()
         }),
-        transform: Transform::from_xyz(0.5, 100.0, 0.5),
+        transform: Transform::from_xyz(0.5, 0.0, 0.5),
         ..Default::default()
     });
 
@@ -77,6 +78,15 @@ fn setup(
         .insert(scene_handle)
         .insert(GlobalTransform::default())
         .insert(Transform::from_xyz(0.0, 0.0, 0.0));
+
+    commands
+        .spawn()
+        .insert(Raytraced {
+            aabb_extent: bevy::math::Vec3::new(4.0, 4.0, 4.0),
+        })
+        .insert(watertank_handle)
+        .insert(GlobalTransform::default())
+        .insert(Transform::from_xyz(-10.0, -10.0, -10.0));
     /*
     commands
         .spawn()

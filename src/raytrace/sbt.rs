@@ -1,5 +1,7 @@
+//! Utils for Shader Binding Table
+
+
 use ash::{prelude::VkResult, vk};
-use bevy::utils::HashSet;
 
 #[derive(Clone, Copy)]
 pub enum HitGroupType {

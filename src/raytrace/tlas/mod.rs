@@ -414,7 +414,6 @@ fn tlas_update(
         .iter()
         .filter(|(_, _, model)| !voxel_models.get(*model).is_none())
         .map(|(transform, aabb, model_handle)| {
-            println!("data is {:?}", aabb);
             // We use the same unit box BLAS for all instances. So, we change the shape of the unit box by streching it.
             let scale = transform.scale * aabb.aabb_extent;
             let mat = Mat4::from_scale_rotation_translation(
@@ -427,7 +426,7 @@ fn tlas_update(
             let model = voxel_models.get(model_handle).unwrap();
             let custom_index = model.svdag.get_roots()[0].get_value();
             let mask: u8 = 0xFF;
-            println!("custom index is {}", custom_index);
+            println!("data is {:?}, custom index is {}", aabb, custom_index);
             unsafe {
                 let mut instance = vk::AccelerationStructureInstanceKHR {
                     transform: vk::TransformMatrixKHR {
@@ -459,7 +458,7 @@ fn tlas_update(
         debug_assert!(state.tlas_mem.is_none());
         debug_assert_eq!(state.tlas_buf, vk::Buffer::null());
         println!(
-            "Swapping TLAS, before {:?}, after {:?}",
+            "Deleted TLAS, before {:?}, after {:?}",
             state.tlas,
             vk::AccelerationStructureKHR::null()
         );

@@ -35,7 +35,6 @@ impl AssetLoader for VoxLoader {
     ) -> BoxedFuture<'a, Result<(), anyhow::Error>> {
         Box::pin(async move {
             let mut svdag = Svdag::new(self.block_allocator.clone(), 1);
-            let mut grid = svdag.get_grid_accessor_mut(11, 0);
             println!("started loading vox");
             let scene = dot_vox::load_bytes(bytes).map_err(|err| anyhow::Error::msg(err))?;
             println!("end loading vox");
@@ -51,20 +50,32 @@ impl AssetLoader for VoxLoader {
                 z: i32::MIN,
             };
 
-            let offset = Vec3 {
-                x: 1024,
-                y: 1024,
-                z: 1024,
-            };
-
+            let mut translation_min = Vec3::MAX;
+            let mut translation_max = Vec3::MIN;
+            self.traverse(&scene, |model_id, translation, rotation| {
+                let model = &scene.models[model_id as usize];
+                let size: Vec3 = Vec3 {
+                    x: model.size.x as i32,
+                    y: model.size.y as i32,
+                    z: model.size.z as i32,
+                };
+                let size = rotation * size;
+                let halfsize = size / 2;
+                translation_min.x = translation_min.x.min(translation.x - halfsize.x.abs());
+                translation_min.y = translation_min.y.min(translation.y - halfsize.y.abs());
+                translation_min.z = translation_min.z.min(translation.z - halfsize.z.abs());
+                translation_max.x = translation_max.x.max(translation.x + halfsize.x.abs());
+                translation_max.y = translation_max.y.max(translation.y + halfsize.y.abs());
+                translation_max.z = translation_max.z.max(translation.z + halfsize.z.abs());
+            });
+            let scene_size = translation_max - translation_min;
+            let scene_size = scene_size.x.max(scene_size.y).max(scene_size.z);
+            let mut grid = svdag
+                .get_grid_accessor_mut(crate::util::next_pow2_sqrt(scene_size as u32) as u8, 0);
+            let offset = -translation_min;
             self.traverse(&scene, |model_id, translation, rotation| {
                 /*
-                translation_min.x = translation_min.x.min(translation.x);
-                translation_min.y = translation_min.y.min(translation.y);
-                translation_min.z = translation_min.z.min(translation.z);
-                translation_max.x = translation_max.x.max(translation.x);
-                translation_max.y = translation_max.y.max(translation.y);
-                translation_max.z = translation_max.z.max(translation.z);
+
                 */
 
                 let model = &scene.models[model_id as usize];
@@ -182,6 +193,16 @@ struct Vec3 {
 impl Vec3 {
     const ZERO: Vec3 = Vec3 { x: 0, y: 0, z: 0 };
     const ONE: Vec3 = Vec3 { x: 1, y: 1, z: 1 };
+    const MAX: Vec3 = Vec3 {
+        x: i32::MAX,
+        y: i32::MAX,
+        z: i32::MAX,
+    };
+    const MIN: Vec3 = Vec3 {
+        x: i32::MIN,
+        y: i32::MIN,
+        z: i32::MIN,
+    };
     fn as_slice(&self) -> &[i32; 3] {
         unsafe { std::mem::transmute(self) }
     }
@@ -245,6 +266,17 @@ impl std::ops::Mul<i32> for Vec3 {
 impl std::cmp::PartialEq for Vec3 {
     fn eq(&self, rhs: &Vec3) -> bool {
         self.x == rhs.x && self.y == rhs.y && self.z == rhs.z
+    }
+}
+
+impl std::ops::Neg for Vec3 {
+    type Output = Vec3;
+    fn neg(self) -> Self::Output {
+        Vec3 {
+            x: -self.x,
+            y: -self.y,
+            z: -self.z,
+        }
     }
 }
 
