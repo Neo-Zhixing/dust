@@ -1,0 +1,2 @@
+- Find out how to listen to asset loading events, and rebuild tlas when that happens
+- Deallocate existing tlas assets

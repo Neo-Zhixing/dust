@@ -2,6 +2,7 @@ mod arena_alloc;
 mod block_alloc;
 mod ray_pass_driver;
 mod ray_shaders;
+mod sbt;
 mod svdag;
 mod tlas;
 mod vox;
@@ -375,10 +376,10 @@ impl Node for RaytracingNode {
                     );
                     raytracing_pipeline_loader.cmd_trace_rays(
                         command_buffer,
-                        &ray_shaders.raygen_shader_binding_tables,
-                        &ray_shaders.miss_shader_binding_tables,
-                        &ray_shaders.hit_shader_binding_tables,
-                        &ray_shaders.callable_shader_binding_tables,
+                        &ray_shaders.sbt.raygen_shader_binding_tables,
+                        &ray_shaders.sbt.miss_shader_binding_tables,
+                        &ray_shaders.sbt.hit_shader_binding_tables,
+                        &ray_shaders.sbt.callable_shader_binding_tables,
                         extent.0,
                         extent.1,
                         1,

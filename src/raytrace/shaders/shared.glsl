@@ -4,6 +4,11 @@ struct RayPayload {
     bool didHit;
 };
 
+struct ShadowRayPayload {
+    bool shadowed;
+};
+
+
 struct HitAttributes {
     vec3 normal;
     uint numIterations;

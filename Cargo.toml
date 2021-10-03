@@ -29,6 +29,7 @@ wgpu-types = { path = "../wgpu/wgpu-types" }
 crossbeam = "0.8"
 dot_vox = { git = "https://github.com/Sixmorphugus/dot_vox", branch="scenegraph" }
 anyhow = "*"
+num = "0.4"
 
 [build-dependencies]
 shaderc = "0.7"

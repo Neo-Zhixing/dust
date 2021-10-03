@@ -30,8 +30,9 @@ void main() {
 
 
   payload.color = vec3(0.0, 0.0, 0.0);
+  payload.didHit = true;
     traceRayEXT(accelerationStructure, // acceleration structure
-        gl_RayFlagsNoneEXT,       // rayFlags
+        gl_RayFlagsOpaqueEXT,       // rayFlags
         0xFF,           // cullMask
         0,              // sbtRecordOffset
         0,              // sbtRecordStride

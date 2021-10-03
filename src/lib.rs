@@ -5,6 +5,8 @@
 #![feature(slice_ptr_get)]
 #![feature(asm)]
 #![feature(core_intrinsics)]
+#![feature(const_cstr_unchecked)]
+#![feature(adt_const_params)]
 
 mod device_info;
 mod fps_counter;
