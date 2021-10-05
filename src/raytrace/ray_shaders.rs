@@ -165,6 +165,8 @@ impl FromWorld for RayShaders {
             );
             drop(sbt_builder);
 
+            /*
+            TODO
             device.update_descriptor_sets(
                 &[vk::WriteDescriptorSet::builder()
                     .dst_set(target_img_desc_set)
@@ -178,6 +180,7 @@ impl FromWorld for RayShaders {
                     .build()],
                 &[],
             );
+            */
             RayShaders {
                 pipeline: raytracing_pipeline,
                 pipeline_layout,

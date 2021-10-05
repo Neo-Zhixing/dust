@@ -1,6 +1,5 @@
 //! Utils for Shader Binding Table
 
-
 use ash::{prelude::VkResult, vk};
 
 #[derive(Clone, Copy)]

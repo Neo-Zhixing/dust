@@ -1,22 +1,30 @@
 use ash::vk;
 
-use super::{AllocError, AllocatorCreateInfo, BlockAllocation, BlockAllocator};
+use super::{
+    AllocError, AllocatorCreateInfo, BlockAllocation, BlockAllocator, BlockAllocatorAddressSpace,
+};
 use crossbeam::queue::SegQueue;
 use std::ops::Range;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::Arc;
 
 pub struct IntegratedBlockAllocator {
     device: ash::Device,
     bind_transfer_queue: vk::Queue,
-    memtype: u32,
-    pub buffer: vk::Buffer,
+    bind_transfer_queue_family: u32,
+    graphics_queue_family: u32,
     buffer_size: u64,
 
+    block_size: u64,
+    memory_properties: vk::PhysicalDeviceMemoryProperties,
+}
+
+struct IntegratedAddressSpace {
+    buffer: vk::Buffer,
+    memtype: u32,
     current_offset: AtomicU64,
     free_offsets: SegQueue<u64>,
-    block_size: u64,
 }
+
 unsafe impl Send for IntegratedBlockAllocator {}
 unsafe impl Sync for IntegratedBlockAllocator {}
 
@@ -26,17 +34,27 @@ impl IntegratedBlockAllocator {
         memory_properties: &vk::PhysicalDeviceMemoryProperties,
         create_info: &AllocatorCreateInfo,
     ) -> Self {
-        let queue_family_indices = [
-            create_info.graphics_queue_family,
-            create_info.bind_transfer_queue_family,
-        ];
-        let buffer_size = create_info.max_storage_buffer_size;
+        Self {
+            bind_transfer_queue: create_info.bind_transfer_queue,
+            memory_properties: memory_properties.clone(),
+            block_size: create_info.block_size,
+            device,
+            buffer_size: create_info.max_storage_buffer_size,
+            bind_transfer_queue_family: create_info.bind_transfer_queue_family,
+            graphics_queue_family: create_info.graphics_queue_family,
+        }
+    }
+}
+
+impl BlockAllocator for IntegratedBlockAllocator {
+    unsafe fn create_address_space(&self) -> BlockAllocatorAddressSpace {
+        let queue_family_indices = [self.graphics_queue_family, self.bind_transfer_queue_family];
         let mut buffer_create_info = vk::BufferCreateInfo::builder()
-            .size(buffer_size)
+            .size(self.buffer_size)
             .usage(vk::BufferUsageFlags::STORAGE_BUFFER)
             .flags(vk::BufferCreateFlags::SPARSE_BINDING | vk::BufferCreateFlags::SPARSE_RESIDENCY);
 
-        if create_info.graphics_queue_family == create_info.bind_transfer_queue_family {
+        if self.graphics_queue_family == self.bind_transfer_queue_family {
             buffer_create_info = buffer_create_info.sharing_mode(vk::SharingMode::EXCLUSIVE);
         } else {
             buffer_create_info = buffer_create_info
@@ -44,36 +62,40 @@ impl IntegratedBlockAllocator {
                 .queue_family_indices(&queue_family_indices);
         }
 
-        let device_buffer = device
+        let device_buffer = self
+            .device
             .create_buffer(&buffer_create_info.build(), None)
             .unwrap();
-        let requirements = device.get_buffer_memory_requirements(device_buffer);
-        let memtype = select_integrated_memtype(memory_properties, &requirements);
-        Self {
-            bind_transfer_queue: create_info.bind_transfer_queue,
-            memtype,
+        let requirements = self.device.get_buffer_memory_requirements(device_buffer);
+        let memtype = select_integrated_memtype(&self.memory_properties, &requirements);
+        let address_space = Box::new(IntegratedAddressSpace {
             buffer: device_buffer,
+            memtype,
             current_offset: AtomicU64::new(0),
             free_offsets: SegQueue::new(),
-            block_size: create_info.block_size,
-            device,
-            buffer_size,
-        }
+        });
+        let ptr = Box::leak(address_space) as *mut _ as usize;
+        BlockAllocatorAddressSpace(ptr)
     }
-}
-
-impl BlockAllocator for IntegratedBlockAllocator {
-    unsafe fn allocate_block(&self) -> Result<(*mut u8, BlockAllocation), AllocError> {
-        let resource_offset = self
+    unsafe fn destroy_address_space(&self, address_space: BlockAllocatorAddressSpace) {
+        let address_space = Box::from_raw(address_space.0 as *mut IntegratedAddressSpace);
+        self.device.destroy_buffer(address_space.buffer, None);
+    }
+    unsafe fn allocate_block(
+        &self,
+        address_space: &BlockAllocatorAddressSpace,
+    ) -> Result<(*mut u8, BlockAllocation), AllocError> {
+        let address_space = &*(address_space.0 as *const IntegratedAddressSpace);
+        let resource_offset = address_space
             .free_offsets
             .pop()
-            .unwrap_or_else(|| self.current_offset.fetch_add(1, Ordering::Relaxed));
+            .unwrap_or_else(|| address_space.current_offset.fetch_add(1, Ordering::Relaxed));
         let mem = self
             .device
             .allocate_memory(
                 &vk::MemoryAllocateInfo::builder()
                     .allocation_size(self.block_size)
-                    .memory_type_index(self.memtype)
+                    .memory_type_index(address_space.memtype)
                     .build(),
                 None,
             )
@@ -87,7 +109,7 @@ impl BlockAllocator for IntegratedBlockAllocator {
                 self.bind_transfer_queue,
                 &[vk::BindSparseInfo::builder()
                     .buffer_binds(&[vk::SparseBufferMemoryBindInfo::builder()
-                        .buffer(self.buffer)
+                        .buffer(address_space.buffer)
                         .binds(&[vk::SparseMemoryBind {
                             resource_offset: resource_offset * self.block_size as u64,
                             size: self.block_size,
@@ -104,17 +126,26 @@ impl BlockAllocator for IntegratedBlockAllocator {
         Ok((ptr, allocation))
     }
 
-    unsafe fn deallocate_block(&self, block: BlockAllocation) {
+    unsafe fn deallocate_block(
+        &self,
+        address_space: &BlockAllocatorAddressSpace,
+        block: BlockAllocation,
+    ) {
         let memory: vk::DeviceMemory = std::mem::transmute(block);
         self.device.free_memory(memory, None);
     }
 
-    unsafe fn flush(&self, ranges: &mut dyn Iterator<Item = (&BlockAllocation, Range<u32>)>) {
+    unsafe fn flush(
+        &self,
+        ranges: &mut dyn Iterator<
+            Item = (&BlockAllocatorAddressSpace, &BlockAllocation, Range<u32>),
+        >,
+    ) {
         // TODO: only do this for non-coherent memory
         self.device
             .flush_mapped_memory_ranges(
                 &ranges
-                    .map(|(allocation, range)| {
+                    .map(|(address_space, allocation, range)| {
                         let memory: vk::DeviceMemory = std::mem::transmute(allocation.0);
                         vk::MappedMemoryRange::builder()
                             .memory(memory)
@@ -132,11 +163,26 @@ impl BlockAllocator for IntegratedBlockAllocator {
     fn get_blocksize(&self) -> u64 {
         self.block_size
     }
-    fn get_buffer(&self) -> vk::Buffer {
-        self.buffer
+    fn get_buffer(&self, address_space: &BlockAllocatorAddressSpace) -> vk::Buffer {
+        let address_space = unsafe { &*(address_space.0 as *const IntegratedAddressSpace) };
+        address_space.buffer
     }
     fn get_device_buffer_size(&self) -> u64 {
         self.buffer_size
+    }
+    fn get_buffer_device_address(
+        &self,
+        address_space: &BlockAllocatorAddressSpace,
+    ) -> vk::DeviceAddress {
+        let address_space: &IntegratedAddressSpace =
+            unsafe { &*(address_space.0 as *const IntegratedAddressSpace) };
+        unsafe {
+            self.device.get_buffer_device_address(
+                &vk::BufferDeviceAddressInfo::builder()
+                    .buffer(address_space.buffer)
+                    .build(),
+            )
+        }
     }
 }
 

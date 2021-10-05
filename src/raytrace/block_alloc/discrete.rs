@@ -1,8 +1,10 @@
-use super::{AllocError, AllocatorCreateInfo, BlockAllocation, BlockAllocator};
+use super::{
+    AllocError, AllocatorCreateInfo, BlockAllocation, BlockAllocator, BlockAllocatorAddressSpace,
+};
 use ash::vk;
 use crossbeam::queue::SegQueue;
 use std::ops::Range;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicU16, AtomicU64, Ordering};
 use std::sync::Arc;
 
 pub struct DiscreteBlock {
@@ -12,16 +14,20 @@ pub struct DiscreteBlock {
     offset: u64,
 }
 
+struct DiscreteAddressSpace {
+    device_buffer: vk::Buffer,
+    current_offset: AtomicU64,
+    free_offsets: SegQueue<u64>,
+    device_memtype: u32,
+}
+
 pub struct DiscreteBlockAllocator {
     device: ash::Device,
     block_size: u64,
     bind_transfer_queue: vk::Queue,
-    pub device_buffer: vk::Buffer,
+    bind_transfer_queue_family: u32,
+    graphics_queue_family: u32,
     device_buffer_size: u64,
-    device_memtype: u32,
-
-    current_offset: AtomicU64,
-    free_offsets: SegQueue<u64>,
 
     command_pool: vk::CommandPool,
     command_buffer: vk::CommandBuffer,
@@ -37,29 +43,6 @@ impl DiscreteBlockAllocator {
         memory_properties: &vk::PhysicalDeviceMemoryProperties,
         create_info: &AllocatorCreateInfo,
     ) -> Self {
-        let queue_family_indices = [
-            create_info.graphics_queue_family,
-            create_info.bind_transfer_queue_family,
-        ];
-        let device_buffer_size =
-            (create_info.max_storage_buffer_size / create_info.block_size) * create_info.block_size;
-        let mut buffer_create_info = vk::BufferCreateInfo::builder()
-            .size(device_buffer_size)
-            .usage(vk::BufferUsageFlags::STORAGE_BUFFER | vk::BufferUsageFlags::TRANSFER_DST)
-            .flags(vk::BufferCreateFlags::SPARSE_BINDING | vk::BufferCreateFlags::SPARSE_RESIDENCY);
-
-        if create_info.graphics_queue_family == create_info.bind_transfer_queue_family {
-            buffer_create_info = buffer_create_info.sharing_mode(vk::SharingMode::EXCLUSIVE);
-        } else {
-            buffer_create_info = buffer_create_info
-                .sharing_mode(vk::SharingMode::CONCURRENT)
-                .queue_family_indices(&queue_family_indices);
-        }
-        let device_buffer = device
-            .create_buffer(&buffer_create_info.build(), None)
-            .unwrap();
-        let device_buf_requirements = device.get_buffer_memory_requirements(device_buffer);
-        let device_memtype = select_device_memtype(&memory_properties, &device_buf_requirements);
         let command_pool = device
             .create_command_pool(
                 &vk::CommandPoolCreateInfo::builder()
@@ -91,13 +74,14 @@ impl DiscreteBlockAllocator {
                 None,
             )
             .unwrap();
+
+        let device_buffer_size =
+            (create_info.max_storage_buffer_size / create_info.block_size) * create_info.block_size;
         Self {
             block_size: create_info.block_size,
             bind_transfer_queue: create_info.bind_transfer_queue,
-            device_buffer,
-            device_memtype,
-            current_offset: AtomicU64::new(0),
-            free_offsets: SegQueue::new(),
+            bind_transfer_queue_family: create_info.bind_transfer_queue_family,
+            graphics_queue_family: create_info.graphics_queue_family,
             command_pool,
             command_buffer,
             copy_completion_fence,
@@ -109,11 +93,55 @@ impl DiscreteBlockAllocator {
 }
 
 impl BlockAllocator for DiscreteBlockAllocator {
-    unsafe fn allocate_block(&self) -> Result<(*mut u8, BlockAllocation), AllocError> {
-        let resource_offset = self
+    unsafe fn create_address_space(&self) -> BlockAllocatorAddressSpace {
+        let mut buffer_create_info = vk::BufferCreateInfo::builder()
+            .size(self.device_buffer_size)
+            .usage(vk::BufferUsageFlags::STORAGE_BUFFER | vk::BufferUsageFlags::TRANSFER_DST)
+            .flags(vk::BufferCreateFlags::SPARSE_BINDING | vk::BufferCreateFlags::SPARSE_RESIDENCY);
+
+        let queue_family_indices = [self.graphics_queue_family, self.bind_transfer_queue_family];
+        if self.graphics_queue_family == self.bind_transfer_queue_family {
+            buffer_create_info = buffer_create_info.sharing_mode(vk::SharingMode::EXCLUSIVE);
+        } else {
+            buffer_create_info = buffer_create_info
+                .sharing_mode(vk::SharingMode::CONCURRENT)
+                .queue_family_indices(&queue_family_indices);
+        }
+        let device_buffer = self
+            .device
+            .create_buffer(&buffer_create_info.build(), None)
+            .unwrap();
+        let device_buf_requirements = self.device.get_buffer_memory_requirements(device_buffer);
+        let device_memtype =
+            select_device_memtype(&self.memory_properties, &device_buf_requirements);
+        let address_space = Box::new(DiscreteAddressSpace {
+            device_buffer,
+            current_offset: AtomicU64::new(0),
+            free_offsets: SegQueue::new(),
+            device_memtype,
+        });
+        unsafe {
+            let ptr = Box::leak(address_space) as *mut DiscreteAddressSpace as usize;
+            BlockAllocatorAddressSpace(ptr)
+        }
+    }
+    unsafe fn destroy_address_space(&self, address_space: BlockAllocatorAddressSpace) {
+        let ptr = address_space.0;
+        std::mem::forget(address_space);
+        let address_space = Box::from_raw(ptr as *mut DiscreteAddressSpace);
+        self.device
+            .destroy_buffer(address_space.device_buffer, None);
+    }
+    unsafe fn allocate_block(
+        &self,
+        address_space: &BlockAllocatorAddressSpace,
+    ) -> Result<(*mut u8, BlockAllocation), AllocError> {
+        let address_space: &DiscreteAddressSpace =
+            &*(address_space.0 as *const DiscreteAddressSpace);
+        let resource_offset = address_space
             .free_offsets
             .pop()
-            .unwrap_or_else(|| self.current_offset.fetch_add(1, Ordering::Relaxed));
+            .unwrap_or_else(|| address_space.current_offset.fetch_add(1, Ordering::Relaxed));
 
         let system_buf = self
             .device
@@ -152,7 +180,7 @@ impl BlockAllocator for DiscreteBlockAllocator {
             .device
             .allocate_memory(
                 &vk::MemoryAllocateInfo::builder()
-                    .memory_type_index(self.device_memtype)
+                    .memory_type_index(address_space.device_memtype)
                     .allocation_size(self.block_size)
                     .build(),
                 None,
@@ -169,7 +197,7 @@ impl BlockAllocator for DiscreteBlockAllocator {
                 self.bind_transfer_queue,
                 &[vk::BindSparseInfo::builder()
                     .buffer_binds(&[vk::SparseBufferMemoryBindInfo::builder()
-                        .buffer(self.device_buffer)
+                        .buffer(address_space.device_buffer)
                         .binds(&[vk::SparseMemoryBind {
                             resource_offset: resource_offset * self.block_size as u64,
                             size: self.block_size,
@@ -199,18 +227,29 @@ impl BlockAllocator for DiscreteBlockAllocator {
         Ok((ptr, allocation))
     }
 
-    unsafe fn deallocate_block(&self, allocation: BlockAllocation) {
+    unsafe fn deallocate_block(
+        &self,
+        address_space: &BlockAllocatorAddressSpace,
+        allocation: BlockAllocation,
+    ) {
+        let address_space: &DiscreteAddressSpace =
+            &*(address_space.0 as *const DiscreteAddressSpace);
         let block = allocation.0 as *mut DiscreteBlock;
         let block = Box::from_raw(block);
 
         self.device.destroy_buffer(block.system_buf, None);
         self.device.free_memory(block.system_mem, None);
         self.device.free_memory(block.device_mem, None);
-        self.free_offsets.push(block.offset);
+        address_space.free_offsets.push(block.offset);
         std::mem::forget(allocation);
     }
 
-    unsafe fn flush(&self, ranges: &mut dyn Iterator<Item = (&BlockAllocation, Range<u32>)>) {
+    unsafe fn flush(
+        &self,
+        ranges: &mut dyn Iterator<
+            Item = (&BlockAllocatorAddressSpace, &BlockAllocation, Range<u32>),
+        >,
+    ) {
         self.device
             .reset_command_pool(self.command_pool, vk::CommandPoolResetFlags::empty())
             .unwrap();
@@ -223,16 +262,18 @@ impl BlockAllocator for DiscreteBlockAllocator {
             )
             .unwrap();
 
-        for (block_allocation, range) in ranges {
+        for (address_space, block_allocation, range) in ranges {
             // TODO: revisit for effiency improvements.
             let block = block_allocation.0 as *const DiscreteBlock;
             let block = &*block;
             let location = block.offset * self.block_size as u64 + range.start as u64;
+            let address_space: &DiscreteAddressSpace =
+                &*(address_space.0 as *const DiscreteAddressSpace);
 
             self.device.cmd_copy_buffer(
                 self.command_buffer,
                 block.system_buf,
-                self.device_buffer,
+                address_space.device_buffer,
                 &[vk::BufferCopy {
                     src_offset: range.start as u64,
                     dst_offset: location,
@@ -277,8 +318,24 @@ impl BlockAllocator for DiscreteBlockAllocator {
     fn get_device_buffer_size(&self) -> u64 {
         self.device_buffer_size
     }
-    fn get_buffer(&self) -> vk::Buffer {
-        self.device_buffer
+    fn get_buffer(&self, address_space: &BlockAllocatorAddressSpace) -> vk::Buffer {
+        let address_space: &DiscreteAddressSpace =
+            unsafe { &*(address_space.0 as *const DiscreteAddressSpace) };
+        address_space.device_buffer
+    }
+    fn get_buffer_device_address(
+        &self,
+        address_space: &BlockAllocatorAddressSpace,
+    ) -> vk::DeviceAddress {
+        let address_space: &DiscreteAddressSpace =
+            unsafe { &*(address_space.0 as *const DiscreteAddressSpace) };
+        unsafe {
+            self.device.get_buffer_device_address(
+                &vk::BufferDeviceAddressInfo::builder()
+                    .buffer(address_space.device_buffer)
+                    .build(),
+            )
+        }
     }
 }
 

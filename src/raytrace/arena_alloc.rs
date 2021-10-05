@@ -1,4 +1,4 @@
-use super::block_alloc::{BlockAllocation, BlockAllocator};
+use super::block_alloc::{BlockAllocation, BlockAllocator, BlockAllocatorAddressSpace};
 
 use std::mem::{size_of, ManuallyDrop};
 
@@ -65,6 +65,7 @@ pub trait ArenaAllocated: Sized + Default {}
 
 pub struct ArenaAllocator<T: ArenaAllocated> {
     block_allocator: Arc<ArenaBlockAllocator>,
+    block_allocator_address_space: BlockAllocatorAddressSpace,
     chunks: Vec<(NonNull<ArenaSlot<T>>, BlockAllocation)>,
     freelist_heads: [Handle; 9],
     newspace_top: Handle, // new space to be allocated
@@ -84,8 +85,10 @@ impl<T: ArenaAllocated> ArenaAllocator<T> {
     pub fn new(block_allocator: Arc<ArenaBlockAllocator>) -> Self {
         assert_eq!(block_allocator.get_blocksize(), BLOCK_SIZE);
         debug_assert!(size_of::<T>() >= size_of::<FreeSlot>(),);
+        let address_space = unsafe { block_allocator.create_address_space() };
         Self {
             block_allocator,
+            block_allocator_address_space: address_space,
             chunks: vec![],
             freelist_heads: [Handle::none(); 9],
             // Space pointed by this is guaranteed to have free space > 8
@@ -98,10 +101,13 @@ impl<T: ArenaAllocated> ArenaAllocator<T> {
     #[cfg(test)]
     pub fn potato() -> Self {
         use super::block_alloc::SystemBlockAllocator;
+        let block_allocator: Arc<dyn BlockAllocator> = Arc::new(SystemBlockAllocator::new(
+            NUM_SLOTS_IN_BLOCK as usize * std::mem::size_of::<ArenaSlot<T>>(),
+        ));
+        let address_space = unsafe { block_allocator.create_address_space() };
         Self {
-            block_allocator: Arc::new(SystemBlockAllocator::new(
-                NUM_SLOTS_IN_BLOCK as usize * std::mem::size_of::<ArenaSlot<T>>(),
-            )),
+            block_allocator,
+            block_allocator_address_space: address_space,
             chunks: vec![],
             freelist_heads: [Handle::none(); 9],
             // Space pointed by this is guaranteed to have free space > 8
@@ -114,7 +120,10 @@ impl<T: ArenaAllocated> ArenaAllocator<T> {
 
     unsafe fn alloc_block(&mut self) -> Handle {
         let chunk_index = self.chunks.len() as u32;
-        let (chunk, allocation) = self.block_allocator.allocate_block().unwrap();
+        let (chunk, allocation) = self
+            .block_allocator
+            .allocate_block(&self.block_allocator_address_space)
+            .unwrap();
         self.chunks
             .push((NonNull::new_unchecked(chunk as _), allocation));
         self.num_blocks += 1;
@@ -232,7 +241,10 @@ impl<T: ArenaAllocated> ArenaAllocator<T> {
 
     pub fn flush_all(&self) {
         let block_size = self.block_allocator.get_blocksize() as u32;
-        let mut iterator = self.chunks.iter().map(|chunk| (&chunk.1, 0..block_size));
+        let mut iterator = self
+            .chunks
+            .iter()
+            .map(|chunk| (&self.block_allocator_address_space, &chunk.1, 0..block_size));
         unsafe {
             self.block_allocator.flush(&mut iterator);
         }
