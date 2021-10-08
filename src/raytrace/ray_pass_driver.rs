@@ -28,7 +28,11 @@ impl Node for RayPassDriverNode {
             let extracted_camera = world.entity(*camera_3d).get::<ExtractedCamera>().unwrap();
             let depth_texture = world.entity(*camera_3d).get::<ViewDepthTexture>().unwrap();
             let extracted_window = extracted_windows.get(&extracted_camera.window_id).unwrap();
-            let swap_chain_texture = extracted_window.swap_chain_frame.as_ref().unwrap().clone();
+            let swap_chain_texture = extracted_window
+                .swap_chain_texture
+                .as_ref()
+                .unwrap()
+                .clone();
             graph.run_sub_graph(
                 super::raytracing_graph::NAME,
                 vec![

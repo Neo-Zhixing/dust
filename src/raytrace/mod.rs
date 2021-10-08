@@ -10,7 +10,7 @@ mod vox;
 use ash::vk;
 
 use bevy::render2::camera::PerspectiveProjection;
-use bevy::render2::view::{ExtractedView, ViewMeta};
+use bevy::render2::view::ExtractedView;
 pub use tlas::Raytraced;
 pub use vox::VoxelModel;
 
@@ -198,7 +198,6 @@ impl Node for RaytracingNode {
             .get_resource::<ash::extensions::khr::RayTracingPipeline>()
             .unwrap();
         let device = world.get_resource::<ash::Device>().unwrap();
-        let view_meta = world.get_resource::<ViewMeta>().unwrap();
         let ray_shaders = world.get_resource::<RayShaders>().unwrap();
         let queues = world.get_resource::<Queues>().unwrap();
         let view = graph.get_input_entity(Self::IN_VIEW).unwrap();

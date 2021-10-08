@@ -454,19 +454,29 @@ impl DustPlugin {
         let hal_exposed_adapter = hal_instance
             .expose_adapter(physical_device)
             .expect("Unable to obtain adapter");
+
+        let wgpu_instance = wgpu::Instance::from_hal::<hal::api::Vulkan>(hal_instance);
+
+        let phd_properties = instance.get_physical_device_properties(physical_device);
+        let phd_features = &hal_exposed_adapter.adapter.phd_features;
+        let phd_capabilities = &hal_exposed_adapter.adapter.phd_capabilities;
+        let limits = phd_capabilities.to_wgpu_limits(phd_features);
         let hal_device = hal_exposed_adapter
             .adapter
             .device_from_raw(
                 device.clone(),
                 false,
                 device_extensions,
+                wgpu_hal::vulkan::UpdateAfterBindTypes::from_limits(
+                    &limits,
+                    &phd_properties.limits,
+                ),
                 queue.graphics_queue_family,
                 0,
             )
             .unwrap();
 
-        let instance = wgpu::Instance::from_hal::<hal::api::Vulkan>(hal_instance);
-        let adapter = instance.create_adapter_from_hal(hal_exposed_adapter);
+        let adapter = wgpu_instance.create_adapter_from_hal(hal_exposed_adapter);
         let (device, queue) = adapter
             .create_device_from_hal(
                 hal_device,
@@ -479,7 +489,7 @@ impl DustPlugin {
             )
             .unwrap();
         bevy::render2::renderer::Renderer {
-            instance,
+            instance: wgpu_instance,
             device: Arc::new(device).into(),
             queue: Arc::new(queue),
         }
