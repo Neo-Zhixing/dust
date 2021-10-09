@@ -249,6 +249,10 @@ impl<T: ArenaAllocated> ArenaAllocator<T> {
             self.block_allocator.flush(&mut iterator);
         }
     }
+
+    pub fn get_buffer_device_address(&self) -> ash::vk::DeviceAddress {
+        self.block_allocator.get_buffer_device_address(&self.block_allocator_address_space)
+    }
 }
 
 #[cfg(test)]

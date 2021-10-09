@@ -78,7 +78,6 @@ fn setup(
         .insert(scene_handle)
         .insert(GlobalTransform::default())
         .insert(Transform::from_xyz(0.0, 0.0, 0.0));
-
     commands
         .spawn()
         .insert(Raytraced {

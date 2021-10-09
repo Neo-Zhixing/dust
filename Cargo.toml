@@ -30,6 +30,12 @@ crossbeam = "0.8"
 dot_vox = { git = "https://github.com/Sixmorphugus/dot_vox", branch="scenegraph" }
 anyhow = "*"
 num = "0.4"
+crevice = { path = "../bevy/crates/crevice" }
 
 [build-dependencies]
 shaderc = "0.7"
+
+[patch.crates-io]
+wgpu = { path = "../wgpu/wgpu", features = ["spirv"] }
+wgpu-hal = { path = "../wgpu/wgpu-hal" }
+wgpu-types = { path = "../wgpu/wgpu-types" }

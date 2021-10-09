@@ -72,7 +72,7 @@ impl Default for Slot {
 impl ArenaAllocated for Slot {}
 
 pub struct Svdag {
-    arena: ArenaAllocator<Slot>,
+    pub(crate) arena: ArenaAllocator<Slot>,
     roots: Vec<Handle>,
 }
 

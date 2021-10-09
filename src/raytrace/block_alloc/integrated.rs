@@ -51,7 +51,7 @@ impl BlockAllocator for IntegratedBlockAllocator {
         let queue_family_indices = [self.graphics_queue_family, self.bind_transfer_queue_family];
         let mut buffer_create_info = vk::BufferCreateInfo::builder()
             .size(self.buffer_size)
-            .usage(vk::BufferUsageFlags::STORAGE_BUFFER)
+            .usage(vk::BufferUsageFlags::STORAGE_BUFFER | vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS)
             .flags(vk::BufferCreateFlags::SPARSE_BINDING | vk::BufferCreateFlags::SPARSE_RESIDENCY);
 
         if self.graphics_queue_family == self.bind_transfer_queue_family {

@@ -164,23 +164,6 @@ impl FromWorld for RayShaders {
                 &device_info.raytracing_pipeline_properties,
             );
             drop(sbt_builder);
-
-            /*
-            TODO
-            device.update_descriptor_sets(
-                &[vk::WriteDescriptorSet::builder()
-                    .dst_set(target_img_desc_set)
-                    .dst_binding(3)
-                    .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
-                    .buffer_info(&[vk::DescriptorBufferInfo::builder()
-                        .buffer(block_allocator.get_buffer())
-                        .offset(0)
-                        .range(block_allocator.get_device_buffer_size())
-                        .build()])
-                    .build()],
-                &[],
-            );
-            */
             RayShaders {
                 pipeline: raytracing_pipeline,
                 pipeline_layout,

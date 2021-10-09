@@ -16,7 +16,7 @@ pub use vox::VoxelModel;
 
 use bevy::prelude::*;
 use bevy::render2::render_graph::{Node, RenderGraph, SlotInfo, SlotType};
-use bevy::render2::RenderApp;
+use bevy::render2::{RenderApp, RenderStage};
 
 use self::block_alloc::{
     AllocatorCreateInfo, BlockAllocator, DiscreteBlockAllocator, IntegratedBlockAllocator,
@@ -142,6 +142,7 @@ impl Plugin for RaytracePlugin {
             .unwrap();
 
         render_app.add_plugin(tlas::TlasPlugin::default());
+        render_app.add_system_to_stage(RenderStage::Queue, update_desc_sets);
 
         self.add_block_allocator(app);
         app.add_plugin(vox::VoxPlugin::default());
@@ -199,6 +200,7 @@ impl Node for RaytracingNode {
             .unwrap();
         let device = world.get_resource::<ash::Device>().unwrap();
         let ray_shaders = world.get_resource::<RayShaders>().unwrap();
+        let uniform_arr = world.get_resource::<tlas::UniformArray>().unwrap();
         let queues = world.get_resource::<Queues>().unwrap();
         let view = graph.get_input_entity(Self::IN_VIEW).unwrap();
         let view = world.get_entity(view).unwrap();
@@ -256,19 +258,7 @@ impl Node for RaytracingNode {
         };
 
         unsafe {
-            let mut write_desc_set_as_ext =
-                vk::WriteDescriptorSetAccelerationStructureKHR::default();
-            write_desc_set_as_ext.acceleration_structure_count = 1;
-            write_desc_set_as_ext.p_acceleration_structures = &tlas_state.tlas;
-            let mut write_desc_set_as = vk::WriteDescriptorSet::builder()
-                .dst_set(ray_shaders.target_img_desc_set)
-                .dst_binding(2)
-                .descriptor_type(vk::DescriptorType::ACCELERATION_STRUCTURE_KHR)
-                .build();
-            write_desc_set_as.p_next =
-                &write_desc_set_as_ext as *const _ as *const std::ffi::c_void;
-            write_desc_set_as.descriptor_count = 1;
-
+            device.device_wait_idle().unwrap();
             device.update_descriptor_sets(
                 &[
                     vk::WriteDescriptorSet::builder()
@@ -291,7 +281,6 @@ impl Node for RaytracingNode {
                             image_layout: vk::ImageLayout::GENERAL, // TODO: ???
                         }])
                         .build(),
-                    write_desc_set_as,
                 ],
                 &[],
             );
@@ -302,6 +291,13 @@ impl Node for RaytracingNode {
                     assert_ne!(command_buffer, vk::CommandBuffer::null());
 
                     let desc_sets = [ray_shaders.target_img_desc_set];
+                    device.cmd_copy_buffer(command_buffer, uniform_arr.get_staging_buffer(), uniform_arr.get_buffer(), &[
+                        vk::BufferCopy {
+                            src_offset: 0,
+                            dst_offset: 0,
+                            size: uniform_arr.get_full_size(),
+                        }
+                    ]);
                     device.cmd_pipeline_barrier(
                         command_buffer,
                         vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT,
@@ -428,5 +424,48 @@ impl Node for RaytracingNode {
                 });
         }
         Ok(())
+    }
+}
+
+fn update_desc_sets(
+    ray_shaders: Res<RayShaders>,
+    tlas_state: Res<TlasState>,
+    device: Res<ash::Device>,
+    uniform_arr: Res<tlas::UniformArray>,
+) {
+    if uniform_arr.get_buffer() == vk::Buffer::null() {
+        return;
+    }
+    unsafe {
+        let mut write_desc_set_as_ext =
+            vk::WriteDescriptorSetAccelerationStructureKHR::default();
+        write_desc_set_as_ext.acceleration_structure_count = 1;
+        write_desc_set_as_ext.p_acceleration_structures = &tlas_state.tlas;
+        let mut write_desc_set_as = vk::WriteDescriptorSet::builder()
+            .dst_set(ray_shaders.target_img_desc_set)
+            .dst_binding(2)
+            .descriptor_type(vk::DescriptorType::ACCELERATION_STRUCTURE_KHR)
+            .build();
+        write_desc_set_as.p_next =
+            &write_desc_set_as_ext as *const _ as *const std::ffi::c_void;
+        write_desc_set_as.descriptor_count = 1;
+        device.device_wait_idle().unwrap();
+        println!("Update to buffer {:?} with size {}", uniform_arr.get_buffer(), uniform_arr.get_full_size());
+        device.update_descriptor_sets(
+            &[
+                write_desc_set_as,
+                vk::WriteDescriptorSet::builder()
+                    .dst_set(ray_shaders.target_img_desc_set)
+                    .dst_binding(3)
+                    .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
+                    .buffer_info(&[vk::DescriptorBufferInfo {
+                        buffer: uniform_arr.get_buffer(),
+                        range: uniform_arr.get_full_size(),
+                        offset: 0,
+                    }])
+                    .build(),
+            ],
+            &[],
+        );
     }
 }

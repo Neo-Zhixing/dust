@@ -96,7 +96,7 @@ impl BlockAllocator for DiscreteBlockAllocator {
     unsafe fn create_address_space(&self) -> BlockAllocatorAddressSpace {
         let mut buffer_create_info = vk::BufferCreateInfo::builder()
             .size(self.device_buffer_size)
-            .usage(vk::BufferUsageFlags::STORAGE_BUFFER | vk::BufferUsageFlags::TRANSFER_DST)
+            .usage(vk::BufferUsageFlags::STORAGE_BUFFER | vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS)
             .flags(vk::BufferCreateFlags::SPARSE_BINDING | vk::BufferCreateFlags::SPARSE_RESIDENCY);
 
         let queue_family_indices = [self.graphics_queue_family, self.bind_transfer_queue_family];

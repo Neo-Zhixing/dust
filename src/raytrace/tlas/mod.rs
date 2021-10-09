@@ -1,17 +1,14 @@
-use std::{ffi::c_void, mem::MaybeUninit};
+mod state;
+mod uniform;
+pub use uniform::UniformArray;
+pub use state::TlasState;
+use std::{mem::MaybeUninit};
 
 use ash::vk;
-use bevy::{
-    ecs::system::SystemState,
-    prelude::*,
-    render2::{RenderStage, RenderWorld},
-};
+use bevy::{ecs::system::SystemState, prelude::*, render2::{RenderStage, RenderWorld}, utils::HashMap};
 use gpu_alloc_ash::AshMemoryDevice;
 
-use crate::{device_info::DeviceInfo, Queues};
-
-use super::vox;
-
+use crate::{Queues, VoxelModel, device_info::DeviceInfo, raytrace::tlas::uniform::UniformEntry};
 #[derive(Debug)]
 pub struct Raytraced {
     pub aabb_extent: bevy::math::Vec3,
@@ -21,6 +18,7 @@ pub struct TlasPlugin;
 
 impl Plugin for TlasPlugin {
     fn build(&self, app: &mut App) {
+        app.insert_resource(uniform::UniformArray::new());
         tlas_setup(app);
         app.add_system_to_stage(RenderStage::Extract, tlas_update);
         //.add_system_to_stage(
@@ -30,26 +28,7 @@ impl Plugin for TlasPlugin {
     }
 }
 
-pub struct TlasState {
-    pub tlas: vk::AccelerationStructureKHR,
-    tlas_buf: vk::Buffer,
-    tlas_mem: Option<crate::MemoryBlock>,
-    tlas_data_buf: vk::Buffer,
-    tlas_data_mem: Option<crate::MemoryBlock>,
-    tlas_scratch_buf: vk::Buffer,
-    tlas_scratch_mem: Option<crate::MemoryBlock>,
-    unit_box_as: vk::AccelerationStructureKHR,
-    unit_box_as_buf: vk::Buffer,
-    unit_box_as_mem: crate::MemoryBlock,
-    unit_box_as_device_address: u64,
-    unit_box_scratch_mem: Option<crate::MemoryBlock>,
-    unit_box_scratch_buf: vk::Buffer,
-    command_pool: vk::CommandPool,
-    command_buffer: vk::CommandBuffer,
-    needs_update_next_frame: bool,
-    have_updates_pending: bool,
-    pub fence: vk::Fence,
-}
+
 
 fn tlas_setup(app: &mut App) {
     let (device, mut allocator, queues, device_info, acceleration_structure_loader, desc_pool) =
@@ -342,7 +321,7 @@ fn tlas_update(
     entities_query: Query<(&GlobalTransform, &Raytraced, &Handle<crate::VoxelModel>)>,
 ) {
     let render_world = &mut *render_world;
-    let (device, mut state, queues, acceleration_structure_loader, mut allocator, device_info) =
+    let (device, mut state, queues, acceleration_structure_loader, mut allocator, device_info, mut uniform_arr) =
         SystemState::<(
             Res<ash::Device>,
             ResMut<TlasState>,
@@ -350,70 +329,32 @@ fn tlas_update(
             Res<ash::extensions::khr::AccelerationStructure>,
             ResMut<crate::Allocator>,
             Res<DeviceInfo>,
+            ResMut<uniform::UniformArray>,
         )>::new(render_world)
         .get_mut(render_world);
 
-    // Clear the command buffer if the update was completed
-    let mut have_updates_pending = state.have_updates_pending;
-    if have_updates_pending {
-        let updates_finished = unsafe { device.get_fence_status(state.fence).unwrap() };
-        if updates_finished {
-            unsafe {
-                device.reset_fences(&[state.fence]).unwrap();
-                state.have_updates_pending = false;
-                have_updates_pending = false;
-                device
-                    .reset_command_pool(state.command_pool, vk::CommandPoolResetFlags::empty())
-                    .unwrap();
-
-                // Cleanup for Unit Box BLAS
-                if state.unit_box_scratch_buf != vk::Buffer::null() {
-                    device.destroy_buffer(state.unit_box_scratch_buf, None);
-                    state.unit_box_scratch_buf = vk::Buffer::null();
-                }
-                if let Some(mem) = state.unit_box_scratch_mem.take() {
-                    allocator.dealloc(AshMemoryDevice::wrap(&*device), mem);
-                }
-
-                // Cleanup for TLAS
-                if state.tlas_data_buf != vk::Buffer::null() {
-                    device.destroy_buffer(state.tlas_data_buf, None);
-                    state.tlas_data_buf = vk::Buffer::null();
-                }
-                if let Some(mem) = state.tlas_data_mem.take() {
-                    allocator.dealloc(AshMemoryDevice::wrap(&*device), mem);
-                }
-                if state.tlas_scratch_buf != vk::Buffer::null() {
-                    device.destroy_buffer(state.tlas_scratch_buf, None);
-                    state.tlas_scratch_buf = vk::Buffer::null();
-                }
-                if let Some(mem) = state.tlas_scratch_mem.take() {
-                    allocator.dealloc(AshMemoryDevice::wrap(&*device), mem);
-                }
-            }
-        }
-    }
-
     let have_updates_this_frame =
         !anything_changed_query.is_empty() || voxel_model_events.iter().next().is_some(); // have updates this frame
-    let have_updates_last_frame = state.needs_update_next_frame;
-    let need_to_do_updates = have_updates_last_frame | have_updates_this_frame;
-    if !need_to_do_updates {
+    if !state.should_update(&device, &mut allocator, have_updates_this_frame) {
         return;
     }
 
-    if have_updates_pending {
-        state.needs_update_next_frame = true;
-        // Defer the work to next frame
-        return;
-    }
-    state.needs_update_next_frame = false;
-
+    let mut models_in_use: Vec<Handle<VoxelModel>> = Vec::new();
+    let mut model_to_index: HashMap<Handle<VoxelModel>, u32> = HashMap::default();
     // do updates
     let data: Vec<_> = entities_query
         .iter()
         .filter(|(_, _, model)| !voxel_models.get(*model).is_none())
         .map(|(transform, aabb, model_handle)| {
+            let custom_index: u32 = if let Some(index) = model_to_index.get(&Handle::weak(model_handle.id)) {
+                *index
+            } else {
+                let index = models_in_use.len() as u32;
+                models_in_use.push(Handle::weak(model_handle.id));
+                model_to_index.insert(Handle::weak(model_handle.id), index);
+                index
+            };
+            assert_eq!(custom_index & !0xFFFFFF, 0, "Index Overflow");
             // We use the same unit box BLAS for all instances. So, we change the shape of the unit box by streching it.
             let scale = transform.scale * aabb.aabb_extent;
             let mat = Mat4::from_scale_rotation_translation(
@@ -423,8 +364,6 @@ fn tlas_update(
             );
             let mat = mat.transpose().to_cols_array();
 
-            let model = voxel_models.get(model_handle).unwrap();
-            let custom_index = model.svdag.get_roots()[0].get_value();
             let mask: u8 = 0xFF;
             println!("data is {:?}, custom index is {}", aabb, custom_index);
             unsafe {
@@ -467,6 +406,19 @@ fn tlas_update(
         state.tlas_mem = None;
         return;
     }
+
+    unsafe {
+        uniform_arr.write(models_in_use.iter().map(|handle| {
+            let model = voxel_models.get(handle).unwrap(); // We already made sure that the model was loaded.
+            UniformEntry {
+                device: uniform::DeviceAddress(model.svdag.arena.get_buffer_device_address()),
+                parent: model.svdag.get_roots()[0].get_value(),
+            }
+        }), &device, &mut allocator);
+    }
+
+
+    println!("models in use are {:?}", models_in_use);
     let data_device_addr = unsafe {
         let data_buf = device
             .create_buffer(
@@ -691,6 +643,6 @@ fn tlas_update(
         state.tlas = tlas;
         state.tlas_buf = as_buf;
         state.tlas_mem = Some(as_mem);
-        state.have_updates_pending = true;
+        state.did_updates();
     }
 }
