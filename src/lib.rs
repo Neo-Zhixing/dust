@@ -13,6 +13,8 @@ mod fps_counter;
 mod queues;
 mod raytrace;
 mod util;
+mod window;
+mod swapchain;
 
 use bevy::render2::RenderApp;
 use device_info::DeviceInfo;
@@ -43,9 +45,14 @@ impl Plugin for DustPlugin {
             .add_plugin(bevy::pbr2::PbrPlugin::default());
 
         self.extract(app, state);
-        app.add_plugin(raytrace::RaytracePlugin::default())
+        app
+        .add_plugin(window::WindowRenderPlugin::default())
+        .add_plugin(raytrace::RaytracePlugin::default())
             .insert_resource(fps_counter::FPSCounter::default())
             .add_system(fps_counter::fps_counter);
+        
+        app.sub_app(RenderApp)
+        .add_system_to_stage(bevy::render2::RenderStage::Render, swapchain::render_system.exclusive_system());
     }
 }
 impl DustPlugin {
@@ -59,7 +66,6 @@ impl DustPlugin {
         ash::Instance,
         vk::PhysicalDevice,
         DeviceInfo,
-        ash::extensions::khr::Surface,
     ) {
         unsafe {
             let entry = ash::Entry::new().unwrap();
@@ -123,9 +129,6 @@ impl DustPlugin {
                 let device_info = device_info.clone();
                 (physical_device, device_info)
             };
-
-            let surface_loader = ash::extensions::khr::Surface::new(&entry, &instance);
-
             let (graphics_queue_family, compute_queue_family, transfer_binding_queue_family) = {
                 let available_queue_family =
                     instance.get_physical_device_queue_family_properties(physical_device);
@@ -289,7 +292,6 @@ impl DustPlugin {
                 instance,
                 physical_device,
                 device_info,
-                surface_loader,
             )
         }
     }
@@ -304,11 +306,10 @@ impl DustPlugin {
             ash::Instance,
             vk::PhysicalDevice,
             DeviceInfo,
-            ash::extensions::khr::Surface,
         ),
     ) {
         let sub_app = app.sub_app(RenderApp);
-        let (entry, device, queues, instance, physical_device, device_info, surface_loader) = state;
+        let (entry, device, queues, instance, physical_device, device_info) = state;
         let desc_pool = unsafe {
             // This desc pool will be added as a resource to render world
             // Change this whenever you need space for a new global desc set
@@ -353,8 +354,7 @@ impl DustPlugin {
         unsafe {
             sub_app
                 .insert_resource(self.create_allocator(&device_info))
-                .insert_resource(device_info)
-                .insert_resource(surface_loader);
+                .insert_resource(device_info);
         }
     }
     #[allow(unused_variables)]
