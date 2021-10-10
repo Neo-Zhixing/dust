@@ -1,17 +1,15 @@
-use crate::swapchain::{Frame, PresentationFrame, SwapchainImage};
+use crate::swapchain::PresentationFrame;
 use ash::vk;
 use bevy::app::{App, Plugin};
 use bevy::ecs::prelude::*;
 use bevy::render2::view::{ExtractedWindow, ExtractedWindows};
 /// This WindowRenderPlugin replaces bevy's window plugin so that we can take over swapchain creation.
 use bevy::render2::{RenderApp, RenderStage, RenderWorld};
-use bevy::utils::{tracing::debug, HashMap, HashSet};
-use bevy::window::{RawWindowHandleWrapper, WindowId, Windows};
-use std::ops::{Deref, DerefMut};
+use bevy::utils::HashMap;
+use bevy::window::{WindowId, Windows};
+use std::ops::DerefMut;
 
 use super::swapchain::SurfaceState;
-
-use wgpu_hal as hal;
 
 // Token to ensure a system runs on the main thread.
 #[derive(Default)]

@@ -81,7 +81,7 @@ impl SurfaceState {
     }
     pub unsafe fn destroy_swapchain(
         &mut self,
-        device: &ash::Device,
+        _device: &ash::Device,
         swapchain_loader: &ash::extensions::khr::Swapchain,
     ) {
         swapchain_loader.destroy_swapchain(self.swapchain, None);
@@ -251,9 +251,9 @@ pub fn render_system(world: &mut bevy::ecs::world::World) {
     world.resource_scope(|world, mut graph: Mut<RenderGraph>| {
         graph.update(world);
     });
-    let graph = world.get_resource::<RenderGraph>().unwrap();
-    let render_device = world.get_resource::<RenderDevice>().unwrap();
-    let render_queue = world.get_resource::<RenderQueue>().unwrap();
+    let _graph = world.get_resource::<RenderGraph>().unwrap();
+    let _render_device = world.get_resource::<RenderDevice>().unwrap();
+    let _render_queue = world.get_resource::<RenderQueue>().unwrap();
 
     /*
     RenderGraphRunner::run(

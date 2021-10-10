@@ -159,7 +159,7 @@ impl RaytracingNode {
     pub const IN_COLOR_ATTACHMENT: &'static str = "color_attachment";
     pub const IN_DEPTH: &'static str = "depth";
     pub const IN_VIEW: &'static str = "view";
-    pub fn new(world: &mut World) -> Self {
+    pub fn new(_world: &mut World) -> Self {
         RaytracingNode {}
     }
 }
@@ -290,13 +290,16 @@ impl Node for RaytracingNode {
                     assert_ne!(command_buffer, vk::CommandBuffer::null());
 
                     let desc_sets = [ray_shaders.target_img_desc_set];
-                    device.cmd_copy_buffer(command_buffer, uniform_arr.get_staging_buffer(), uniform_arr.get_buffer(), &[
-                        vk::BufferCopy {
+                    device.cmd_copy_buffer(
+                        command_buffer,
+                        uniform_arr.get_staging_buffer(),
+                        uniform_arr.get_buffer(),
+                        &[vk::BufferCopy {
                             src_offset: 0,
                             dst_offset: 0,
                             size: uniform_arr.get_full_size(),
-                        }
-                    ]);
+                        }],
+                    );
                     device.cmd_pipeline_barrier(
                         command_buffer,
                         vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT,
@@ -436,8 +439,7 @@ fn update_desc_sets(
         return;
     }
     unsafe {
-        let mut write_desc_set_as_ext =
-            vk::WriteDescriptorSetAccelerationStructureKHR::default();
+        let mut write_desc_set_as_ext = vk::WriteDescriptorSetAccelerationStructureKHR::default();
         write_desc_set_as_ext.acceleration_structure_count = 1;
         write_desc_set_as_ext.p_acceleration_structures = &tlas_state.tlas;
         let mut write_desc_set_as = vk::WriteDescriptorSet::builder()
@@ -445,11 +447,14 @@ fn update_desc_sets(
             .dst_binding(2)
             .descriptor_type(vk::DescriptorType::ACCELERATION_STRUCTURE_KHR)
             .build();
-        write_desc_set_as.p_next =
-            &write_desc_set_as_ext as *const _ as *const std::ffi::c_void;
+        write_desc_set_as.p_next = &write_desc_set_as_ext as *const _ as *const std::ffi::c_void;
         write_desc_set_as.descriptor_count = 1;
         device.device_wait_idle().unwrap();
-        println!("Update to buffer {:?} with size {}", uniform_arr.get_buffer(), uniform_arr.get_full_size());
+        println!(
+            "Update to buffer {:?} with size {}",
+            uniform_arr.get_buffer(),
+            uniform_arr.get_full_size()
+        );
         device.update_descriptor_sets(
             &[
                 write_desc_set_as,

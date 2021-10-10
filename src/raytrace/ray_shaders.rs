@@ -1,13 +1,11 @@
 use bevy::{ecs::system::SystemState, prelude::*};
-use gpu_alloc::Request;
-use gpu_alloc_ash::AshMemoryDevice;
 
 use super::block_alloc::BlockAllocator;
 use super::tlas::TlasState;
 use crate::device_info::DeviceInfo;
 use crate::raytrace::RaytracingNodeViewConstants;
 use ash::vk;
-use std::ffi::CStr;
+
 use std::io::Cursor;
 use std::sync::Arc;
 
@@ -23,8 +21,8 @@ pub struct RayShaders {
 impl FromWorld for RayShaders {
     fn from_world(world: &mut World) -> Self {
         let (
-            tlas_state,
-            block_allocator,
+            _tlas_state,
+            _block_allocator,
             device,
             raytracing_loader,
             device_info,

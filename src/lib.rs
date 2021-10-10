@@ -12,9 +12,9 @@ mod device_info;
 mod fps_counter;
 mod queues;
 mod raytrace;
+mod swapchain;
 mod util;
 mod window;
-mod swapchain;
 
 use bevy::render2::RenderApp;
 use device_info::DeviceInfo;
@@ -41,18 +41,19 @@ impl Plugin for DustPlugin {
             enable_render_system: false,
             enable_window_plugin: false,
         })
-            .add_plugin(bevy::core_pipeline::CorePipelinePlugin::default())
-            .add_plugin(bevy::pbr2::PbrPlugin::default());
+        .add_plugin(bevy::core_pipeline::CorePipelinePlugin::default())
+        .add_plugin(bevy::pbr2::PbrPlugin::default());
 
         self.extract(app, state);
-        app
-        .add_plugin(window::WindowRenderPlugin::default())
-        .add_plugin(raytrace::RaytracePlugin::default())
+        app.add_plugin(window::WindowRenderPlugin::default())
+            .add_plugin(raytrace::RaytracePlugin::default())
             .insert_resource(fps_counter::FPSCounter::default())
             .add_system(fps_counter::fps_counter);
-        
-        app.sub_app(RenderApp)
-        .add_system_to_stage(bevy::render2::RenderStage::Render, swapchain::render_system.exclusive_system());
+
+        app.sub_app(RenderApp).add_system_to_stage(
+            bevy::render2::RenderStage::Render,
+            swapchain::render_system.exclusive_system(),
+        );
     }
 }
 impl DustPlugin {
@@ -135,7 +136,7 @@ impl DustPlugin {
                 let graphics_queue_family = available_queue_family
                     .iter()
                     .enumerate()
-                    .find(|&(i, family)| {
+                    .find(|&(_i, family)| {
                         family.queue_flags.contains(vk::QueueFlags::GRAPHICS)
                         // TODO && surface_loader
                         //     .get_physical_device_surface_support(physical_device, i as u32, surface)
@@ -447,10 +448,11 @@ impl DustPlugin {
         use wgpu_hal as hal;
 
         let nv_optimus_layer = CStr::from_bytes_with_nul(b"VK_LAYER_NV_optimus\0").unwrap();
-        let has_nv_optimus = entry.enumerate_instance_layer_properties().unwrap()
+        let has_nv_optimus = entry
+            .enumerate_instance_layer_properties()
+            .unwrap()
             .iter()
             .any(|inst_layer| CStr::from_ptr(inst_layer.layer_name.as_ptr()) == nv_optimus_layer);
-
 
         let hal_instance = <hal::api::Vulkan as hal::Api>::Instance::from_raw(
             entry.clone(),

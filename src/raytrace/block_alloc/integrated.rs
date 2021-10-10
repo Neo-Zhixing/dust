@@ -51,7 +51,9 @@ impl BlockAllocator for IntegratedBlockAllocator {
         let queue_family_indices = [self.graphics_queue_family, self.bind_transfer_queue_family];
         let mut buffer_create_info = vk::BufferCreateInfo::builder()
             .size(self.buffer_size)
-            .usage(vk::BufferUsageFlags::STORAGE_BUFFER | vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS)
+            .usage(
+                vk::BufferUsageFlags::STORAGE_BUFFER | vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS,
+            )
             .flags(vk::BufferCreateFlags::SPARSE_BINDING | vk::BufferCreateFlags::SPARSE_RESIDENCY);
 
         if self.graphics_queue_family == self.bind_transfer_queue_family {
@@ -128,7 +130,7 @@ impl BlockAllocator for IntegratedBlockAllocator {
 
     unsafe fn deallocate_block(
         &self,
-        address_space: &BlockAllocatorAddressSpace,
+        _address_space: &BlockAllocatorAddressSpace,
         block: BlockAllocation,
     ) {
         let memory: vk::DeviceMemory = std::mem::transmute(block);
@@ -145,7 +147,7 @@ impl BlockAllocator for IntegratedBlockAllocator {
         self.device
             .flush_mapped_memory_ranges(
                 &ranges
-                    .map(|(address_space, allocation, range)| {
+                    .map(|(_address_space, allocation, range)| {
                         let memory: vk::DeviceMemory = std::mem::transmute(allocation.0);
                         vk::MappedMemoryRange::builder()
                             .memory(memory)
@@ -202,7 +204,7 @@ fn select_integrated_memtype(
         .map_or(0, |(i, _)| i) as u32;
 
     let types = &memory_properties.memory_types[0..memory_properties.memory_type_count as usize];
-    let selected_index = types
+    let _selected_index = types
         .iter()
         .enumerate()
         .position(|(id, memory_type)| {

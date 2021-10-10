@@ -251,7 +251,8 @@ impl<T: ArenaAllocated> ArenaAllocator<T> {
     }
 
     pub fn get_buffer_device_address(&self) -> ash::vk::DeviceAddress {
-        self.block_allocator.get_buffer_device_address(&self.block_allocator_address_space)
+        self.block_allocator
+            .get_buffer_device_address(&self.block_allocator_address_space)
     }
 }
 

@@ -72,7 +72,7 @@ pub trait BlockAllocator: Send + Sync {
     ) -> vk::DeviceAddress;
 }
 
-impl BlockAllocator {
+impl dyn BlockAllocator {
     pub fn new(
         device: ash::Device,
         device_info: &DeviceInfo,

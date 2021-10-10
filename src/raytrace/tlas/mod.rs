@@ -1,14 +1,19 @@
 mod state;
 mod uniform;
-pub use uniform::UniformArray;
 pub use state::TlasState;
-use std::{mem::MaybeUninit};
+use std::mem::MaybeUninit;
+pub use uniform::UniformArray;
 
 use ash::vk;
-use bevy::{ecs::system::SystemState, prelude::*, render2::{RenderStage, RenderWorld}, utils::HashMap};
+use bevy::{
+    ecs::system::SystemState,
+    prelude::*,
+    render2::{RenderStage, RenderWorld},
+    utils::HashMap,
+};
 use gpu_alloc_ash::AshMemoryDevice;
 
-use crate::{Queues, VoxelModel, device_info::DeviceInfo, raytrace::tlas::uniform::UniformEntry};
+use crate::{device_info::DeviceInfo, raytrace::tlas::uniform::UniformEntry, Queues, VoxelModel};
 #[derive(Debug)]
 pub struct Raytraced {
     pub aabb_extent: bevy::math::Vec3,
@@ -28,10 +33,8 @@ impl Plugin for TlasPlugin {
     }
 }
 
-
-
 fn tlas_setup(app: &mut App) {
-    let (device, mut allocator, queues, device_info, acceleration_structure_loader, desc_pool) =
+    let (device, mut allocator, queues, device_info, acceleration_structure_loader, _desc_pool) =
         SystemState::<(
             Res<ash::Device>,
             ResMut<crate::Allocator>,
@@ -321,17 +324,24 @@ fn tlas_update(
     entities_query: Query<(&GlobalTransform, &Raytraced, &Handle<crate::VoxelModel>)>,
 ) {
     let render_world = &mut *render_world;
-    let (device, mut state, queues, acceleration_structure_loader, mut allocator, device_info, mut uniform_arr) =
-        SystemState::<(
-            Res<ash::Device>,
-            ResMut<TlasState>,
-            Res<Queues>,
-            Res<ash::extensions::khr::AccelerationStructure>,
-            ResMut<crate::Allocator>,
-            Res<DeviceInfo>,
-            ResMut<uniform::UniformArray>,
-        )>::new(render_world)
-        .get_mut(render_world);
+    let (
+        device,
+        mut state,
+        queues,
+        acceleration_structure_loader,
+        mut allocator,
+        device_info,
+        mut uniform_arr,
+    ) = SystemState::<(
+        Res<ash::Device>,
+        ResMut<TlasState>,
+        Res<Queues>,
+        Res<ash::extensions::khr::AccelerationStructure>,
+        ResMut<crate::Allocator>,
+        Res<DeviceInfo>,
+        ResMut<uniform::UniformArray>,
+    )>::new(render_world)
+    .get_mut(render_world);
 
     let have_updates_this_frame =
         !anything_changed_query.is_empty() || voxel_model_events.iter().next().is_some(); // have updates this frame
@@ -346,14 +356,15 @@ fn tlas_update(
         .iter()
         .filter(|(_, _, model)| !voxel_models.get(*model).is_none())
         .map(|(transform, aabb, model_handle)| {
-            let custom_index: u32 = if let Some(index) = model_to_index.get(&Handle::weak(model_handle.id)) {
-                *index
-            } else {
-                let index = models_in_use.len() as u32;
-                models_in_use.push(Handle::weak(model_handle.id));
-                model_to_index.insert(Handle::weak(model_handle.id), index);
-                index
-            };
+            let custom_index: u32 =
+                if let Some(index) = model_to_index.get(&Handle::weak(model_handle.id)) {
+                    *index
+                } else {
+                    let index = models_in_use.len() as u32;
+                    models_in_use.push(Handle::weak(model_handle.id));
+                    model_to_index.insert(Handle::weak(model_handle.id), index);
+                    index
+                };
             assert_eq!(custom_index & !0xFFFFFF, 0, "Index Overflow");
             // We use the same unit box BLAS for all instances. So, we change the shape of the unit box by streching it.
             let scale = transform.scale * aabb.aabb_extent;
@@ -408,15 +419,18 @@ fn tlas_update(
     }
 
     unsafe {
-        uniform_arr.write(models_in_use.iter().map(|handle| {
-            let model = voxel_models.get(handle).unwrap(); // We already made sure that the model was loaded.
-            UniformEntry {
-                device: uniform::DeviceAddress(model.svdag.arena.get_buffer_device_address()),
-                parent: model.svdag.get_roots()[0].get_value(),
-            }
-        }), &device, &mut allocator);
+        uniform_arr.write(
+            models_in_use.iter().map(|handle| {
+                let model = voxel_models.get(handle).unwrap(); // We already made sure that the model was loaded.
+                UniformEntry {
+                    device: uniform::DeviceAddress(model.svdag.arena.get_buffer_device_address()),
+                    parent: model.svdag.get_roots()[0].get_value(),
+                }
+            }),
+            &device,
+            &mut allocator,
+        );
     }
-
 
     println!("models in use are {:?}", models_in_use);
     let data_device_addr = unsafe {

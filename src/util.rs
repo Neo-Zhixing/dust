@@ -14,6 +14,6 @@ fn flsu(x: u32) -> u32 {
 
 #[inline]
 pub fn next_pow2_sqrt(x: u32) -> u32 {
-    let y = if (x != 1) { 1 } else { 0 };
+    let y = if x != 1 { 1 } else { 0 };
     return y + flsu(x - y);
 }

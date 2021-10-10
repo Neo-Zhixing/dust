@@ -1,7 +1,6 @@
 use bevy::{
     asset::{AssetLoader, LoadContext, LoadedAsset},
     prelude::*,
-    reflect::TypeUuid,
     utils::BoxedFuture,
 };
 use dot_vox::{DotVoxData, SceneNode};
@@ -9,7 +8,7 @@ use dot_vox::{DotVoxData, SceneNode};
 use std::sync::Arc;
 
 use super::VoxelModel;
-use crate::raytrace::arena_alloc::ArenaAllocator;
+
 use crate::raytrace::block_alloc::BlockAllocator;
 use crate::raytrace::svdag::Svdag;
 
@@ -39,12 +38,12 @@ impl AssetLoader for VoxLoader {
             let scene = dot_vox::load_bytes(bytes).map_err(|err| anyhow::Error::msg(err))?;
             println!("end loading vox");
 
-            let mut translation_min = Vec3 {
+            let _translation_min = Vec3 {
                 x: i32::MAX,
                 y: i32::MAX,
                 z: i32::MAX,
             };
-            let mut translation_max = Vec3 {
+            let _translation_max = Vec3 {
                 x: i32::MIN,
                 y: i32::MIN,
                 z: i32::MIN,
@@ -134,7 +133,7 @@ impl VoxLoader {
         let node = &scene.scene[node as usize];
         match node {
             SceneNode::Transform {
-                attributes,
+                attributes: _,
                 frames,
                 child,
             } => {
@@ -158,14 +157,17 @@ impl VoxLoader {
                 self.traverse_recursive(scene, *child, translation, rotation, callback);
             }
             SceneNode::Group {
-                attributes,
+                attributes: _,
                 children,
             } => {
                 for &i in children {
                     self.traverse_recursive(scene, i, translation, rotation, callback);
                 }
             }
-            SceneNode::Shape { attributes, models } => {
+            SceneNode::Shape {
+                attributes: _,
+                models,
+            } => {
                 // Shape nodes are leafs and correspond to models
                 if models.len() != 1 {
                     unimplemented!("Multiple shape models in Shape node");

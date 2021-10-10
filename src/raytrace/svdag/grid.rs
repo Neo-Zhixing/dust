@@ -71,7 +71,7 @@ pub struct GridAccessorMut<'a> {
 }
 
 impl<'a> GridAccessorMut<'a> {
-    pub fn get(&self, mut x: u32, mut y: u32, mut z: u32) -> bool {
+    pub fn get(&self, x: u32, y: u32, z: u32) -> bool {
         let accessor = GridAccessor {
             dag: self.dag,
             size: self.size,
@@ -94,7 +94,7 @@ impl<'a> GridAccessorMut<'a> {
     //                 if this causes the parent node to have uniform
     unsafe fn set_recursive(
         &mut self,
-        mut handle: &mut Handle,
+        handle: &mut Handle,
         mut x: u32,
         mut y: u32,
         mut z: u32,
@@ -205,7 +205,7 @@ impl<'a> GridAccessorMut<'a> {
 
         let new_slot_num_child = new_mask.count_ones() as u8;
         let new_handle = self.dag.arena.alloc((new_slot_num_child + 1) as u32);
-        let new_slot = self.dag.arena.get(new_handle);
+        let _new_slot = self.dag.arena.get(new_handle);
 
         let mut old_slot_num: u8 = 0;
         let mut new_slot_num: u8 = 0;

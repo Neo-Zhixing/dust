@@ -2,7 +2,7 @@ use super::svdag::Svdag;
 
 mod loader;
 
-use bevy::app::{App, Plugin};
+use bevy::app::App;
 use bevy::prelude::AddAsset;
 use bevy::reflect::TypeUuid;
 
