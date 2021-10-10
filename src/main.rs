@@ -85,7 +85,7 @@ fn setup(
         })
         .insert(watertank_handle)
         .insert(GlobalTransform::default())
-        .insert(Transform::from_xyz(-10.0, -10.0, -10.0));
+        .insert(Transform::from_xyz(0.0, 20.0, 0.0));
     /*
     commands
         .spawn()

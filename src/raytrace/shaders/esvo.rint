@@ -105,7 +105,9 @@ void esvo(Ray ray, float termination_t) {
     float t_max_original = t_max;
     // Initialize the current voxel to the first child of the root.
 
-    uint   parent           = InstanceInfoList[gl_InstanceCustomIndexEXT].parentIndex;
+
+    InstanceInfo instanceInfo = InstanceInfoList[gl_InstanceCustomIndexEXT];
+    uint   parent           = instanceInfo.parentIndex;
     u8vec4   child_descriptor = u8vec4(0, 0, 1, 0);
     uint    idx              = 0;
     uint    scale            = CAST_STACK_DEPTH - 1;
@@ -119,12 +121,11 @@ void esvo(Ray ray, float termination_t) {
         if (comparison.z) idx ^= 1;
     }
 
-    BlockAllocatorAddressSpace instanceAddressSpace = InstanceInfoList[gl_InstanceCustomIndexEXT].addressSpace;
     while(iter < MAX_RAYCAST_ITERATIONS) {
         iter++;
         // Fetch child descriptor unless it is already valid.
         if (CHILD_DESCRIPTOR_NEEDS_REFRESH != 0u) {
-            child_descriptor = unpack8(instanceAddressSpace.values[parent]);
+            child_descriptor = unpack8(instanceInfo.addressSpace.values[parent]);
             CHILD_DESCRIPTOR_NEEDS_REFRESH = uint8_t(0u);
         }
 
@@ -180,7 +181,7 @@ void esvo(Ray ray, float termination_t) {
                 h = tc_max;
 
                 // Find child descriptor corresponding to the current voxel.
-                parent = instanceAddressSpace.values[parent + MaskLocationNthOne(CHILD_DESCRIPTOR_CHLILDMASK, child_shift) + 1];
+                parent = instanceInfo.addressSpace.values[parent + MaskLocationNthOne(CHILD_DESCRIPTOR_CHLILDMASK, child_shift) + 1];
 
 
                 // Select child voxel that the ray enters first.
@@ -253,7 +254,7 @@ void esvo(Ray ray, float termination_t) {
                 stack_len = 0;
                 scale = CAST_STACK_DEPTH - 1;
                 scale_exp2 = 0.5;
-                parent = gl_InstanceCustomIndexEXT;
+                parent = instanceInfo.parentIndex;
                 t_max = t_max_original;
                 pos = vec3(1.0f, 1.0f, 1.0f);
                 idx = 0;

@@ -258,7 +258,6 @@ impl Node for RaytracingNode {
         };
 
         unsafe {
-            device.device_wait_idle().unwrap();
             device.update_descriptor_sets(
                 &[
                     vk::WriteDescriptorSet::builder()

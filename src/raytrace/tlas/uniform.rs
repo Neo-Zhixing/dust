@@ -127,10 +127,8 @@ impl UniformArray {
         let entry_size = UniformEntry::std140_size_static();
         let mut dst = self.staging_ptr as *mut u8;
         for entry in items {
-            unsafe {
-                std::ptr::copy_nonoverlapping(&entry.as_std140() as *const _ as *const u8, dst, entry_size);
-                dst = dst.add(entry_size);
-            }
+            std::ptr::copy_nonoverlapping(&entry.as_std140() as *const _ as *const u8, dst, entry_size);
+            dst = dst.add(entry_size);
         }
     }
     pub fn get_buffer(&self) -> vk::Buffer {

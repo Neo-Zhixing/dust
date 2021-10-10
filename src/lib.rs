@@ -35,7 +35,10 @@ pub struct DustPlugin;
 impl Plugin for DustPlugin {
     fn build(&self, app: &mut App) {
         let state = self.initialize(app);
-        app.add_plugin(bevy::render2::RenderPlugin::default())
+        app.add_plugin(bevy::render2::RenderPlugin {
+            enable_render_system: false,
+            enable_window_plugin: false,
+        })
             .add_plugin(bevy::core_pipeline::CorePipelinePlugin::default())
             .add_plugin(bevy::pbr2::PbrPlugin::default());
 
@@ -442,12 +445,20 @@ impl DustPlugin {
     ) -> bevy::render2::renderer::Renderer {
         use std::sync::Arc;
         use wgpu_hal as hal;
+
+        let nv_optimus_layer = CStr::from_bytes_with_nul(b"VK_LAYER_NV_optimus\0").unwrap();
+        let has_nv_optimus = entry.enumerate_instance_layer_properties().unwrap()
+            .iter()
+            .any(|inst_layer| CStr::from_ptr(inst_layer.layer_name.as_ptr()) == nv_optimus_layer);
+
+
         let hal_instance = <hal::api::Vulkan as hal::Api>::Instance::from_raw(
             entry.clone(),
             instance.clone(),
             driver_api_version,
             instance_extensions,
             hal::InstanceFlags::empty(), // TODO: enable debug flags
+            has_nv_optimus,
             None,
         )
         .unwrap();
