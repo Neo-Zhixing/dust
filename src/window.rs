@@ -1,4 +1,4 @@
-use crate::swapchain::PresentationFrame;
+use crate::swapchain::{SwapchainImage};
 use ash::vk;
 use bevy::app::{App, Plugin};
 use bevy::ecs::prelude::*;
@@ -7,9 +7,11 @@ use bevy::render2::view::{ExtractedWindow, ExtractedWindows};
 use bevy::render2::{RenderApp, RenderStage, RenderWorld};
 use bevy::utils::HashMap;
 use bevy::window::{WindowId, Windows};
+use std::mem::MaybeUninit;
 use std::ops::DerefMut;
 
 use super::swapchain::SurfaceState;
+pub const NUM_FRAMES_IN_FLIGHT: u32 = 3;
 
 // Token to ensure a system runs on the main thread.
 #[derive(Default)]
@@ -32,10 +34,11 @@ impl Plugin for WindowRenderPlugin {
             .insert_resource(swapchain_loader)
             .insert_resource(surface_loader)
             .init_resource::<ExtractedWindows>()
-            .init_resource::<WindowSurfaces>()
+            .init_resource::<RenderState>()
             .init_resource::<NonSendMarker>()
             .add_system_to_stage(RenderStage::Extract, extract_windows)
-            .add_system_to_stage(RenderStage::Prepare, prepare_windows);
+            .add_system_to_stage(RenderStage::Prepare, prepare_windows)
+            .add_system_to_stage(RenderStage::Cleanup, switch_to_next_frame);
     }
 }
 
@@ -71,20 +74,100 @@ fn extract_windows(mut render_world: ResMut<RenderWorld>, windows: Res<Windows>)
 
 pub struct WindowSurface {
     pub state: SurfaceState,
-    pub next_frame: Option<PresentationFrame>,
+    pub next_frame: Option<(SwapchainImage, u32)>,
 }
 
-#[derive(Default)]
-pub struct WindowSurfaces {
-    pub surfaces: HashMap<WindowId, WindowSurface>,
+#[derive(Clone)]
+pub struct Frame {
+    pub(crate) index: u32,
+    pub(crate) render_finished_semaphore: vk::Semaphore,
+    pub(crate) fence: vk::Fence,
+    pub(crate) command_buffer: vk::CommandBuffer,
 }
+
+
+pub struct RenderState {
+    pub surfaces: HashMap<WindowId, WindowSurface>,
+    
+    current_frame: u32,
+    frames_in_flight: [Frame; NUM_FRAMES_IN_FLIGHT as usize],
+
+    // The command pool for per-frame rendering commands. NUM_FRAMES_IN_FLIGHT commands will be allocated from this.
+    command_pool: vk::CommandPool,
+}
+
+impl FromWorld for RenderState {
+    fn from_world(world: &mut World) -> Self {
+        let device = world.get_resource::<ash::Device>().unwrap();
+        let queues = world.get_resource::<crate::Queues>().unwrap();
+        unsafe {
+            Self::new(device, queues)
+        }
+    }
+}
+
+impl RenderState {
+    pub unsafe fn new(device: &ash::Device, queues: &crate::Queues) -> Self {
+        let mut frames_in_flight: [MaybeUninit<Frame>; NUM_FRAMES_IN_FLIGHT as usize] =
+        MaybeUninit::uninit_array();
+        
+        let command_pool = device.create_command_pool(
+            &vk::CommandPoolCreateInfo::builder()
+            .queue_family_index(queues.graphics_queue_family)
+            .flags(vk::CommandPoolCreateFlags::RESET_COMMAND_BUFFER | vk::CommandPoolCreateFlags::TRANSIENT)
+            .build(),
+            None,
+        ).unwrap();
+
+        let mut command_buffers = [vk::CommandBuffer::null(); NUM_FRAMES_IN_FLIGHT as usize];
+
+        let result = device.fp_v1_0().allocate_command_buffers(
+            device.handle(),
+            &vk::CommandBufferAllocateInfo::builder()
+            .command_pool(command_pool)
+            .level(vk::CommandBufferLevel::PRIMARY)
+            .command_buffer_count(NUM_FRAMES_IN_FLIGHT)
+            .build(),
+            command_buffers.as_mut_ptr(),
+        );
+        assert_eq!(result, vk::Result::SUCCESS);
+        for (i, frame) in frames_in_flight.iter_mut().enumerate() {
+            frame.write(Frame {
+                index: i as u32,
+                render_finished_semaphore: device
+                    .create_semaphore(&vk::SemaphoreCreateInfo::default(), None)
+                    .unwrap(),
+                fence: device
+                    .create_fence(
+                        &vk::FenceCreateInfo::builder()
+                            .flags(vk::FenceCreateFlags::SIGNALED)
+                            .build(),
+                        None,
+                    )
+                    .unwrap(),
+                command_buffer: command_buffers[i],
+            });
+        }
+        Self {
+            surfaces: HashMap::default(),
+            current_frame: 0,
+            frames_in_flight: std::mem::transmute(frames_in_flight),
+            command_pool,
+        }
+    }
+    
+    pub fn current_frame(&self) -> &Frame {
+        &self.frames_in_flight[self.current_frame as usize]
+    }
+}
+
 
 pub fn prepare_windows(
     // By accessing a NonSend resource, we tell the scheduler to put this system on the main thread,
     // which is necessary for some OS s
     _marker: NonSend<NonSendMarker>,
     mut windows: ResMut<ExtractedWindows>,
-    mut window_surfaces: ResMut<WindowSurfaces>,
+    mut window_surfaces: ResMut<RenderState>,
     entry: Res<ash::Entry>,
     device: Res<ash::Device>,
     instance: Res<ash::Instance>,
@@ -93,11 +176,25 @@ pub fn prepare_windows(
     physical_device: Res<vk::PhysicalDevice>,
     wgpu_device: Res<bevy::render2::renderer::RenderDevice>,
 ) {
-    println!("prepare windows");
-    let window_surfaces = window_surfaces.deref_mut();
+    let render_state = window_surfaces.deref_mut();
+    let frame_in_flight = render_state.current_frame().clone();
+    
+    
+    unsafe {
+        device
+        // Wait so that the previous frame finishes rendering
+        // TODO: maybe move to after acquire the image?
+        .wait_for_fences(&[frame_in_flight.fence], true, u64::MAX)
+        .unwrap();
+    }
+
+
+
+
+
     for window in windows.windows.values_mut() {
         use std::collections::hash_map::Entry;
-        let window_surface = match window_surfaces.surfaces.entry(window.id) {
+        let window_surface = match render_state.surfaces.entry(window.id) {
             Entry::Occupied(entry) => {
                 let window_surface = entry.into_mut();
                 if window.size_changed {
@@ -106,6 +203,7 @@ pub fn prepare_windows(
                             .state
                             .destroy_swapchain(&device, &swapchain_loader);
                         window_surface.state.build_swapchain(
+                            &instance,
                             &surface_loader,
                             &swapchain_loader,
                             *physical_device,
@@ -119,6 +217,7 @@ pub fn prepare_windows(
                 let state = unsafe {
                     let mut state = SurfaceState::new(&entry, &instance, &device, &window.handle);
                     state.build_swapchain(
+                        &instance,
                         &surface_loader,
                         &swapchain_loader,
                         *physical_device,
@@ -133,10 +232,26 @@ pub fn prepare_windows(
             }
         };
 
-        let presentation_frame =
-            unsafe { window_surface.state.next_frame(&device, &swapchain_loader) };
+        let (swapchain_image, swapchain_image_index) =
+            unsafe { window_surface.state.next_image(&device, &frame_in_flight, &swapchain_loader) };
 
-        window.swap_chain_texture = Some(presentation_frame.swapchain_image.bevy_texture.clone());
-        window_surface.next_frame = Some(presentation_frame)
+        unsafe {
+            device.reset_fences(&[frame_in_flight.fence]).unwrap();
+        }
+        
+        window.swap_chain_texture = Some(swapchain_image.bevy_texture.clone());
+        window_surface.next_frame = Some((swapchain_image, swapchain_image_index))
+    }
+    
+
+}
+
+fn switch_to_next_frame(
+    mut render_state: ResMut<RenderState>,
+    device: Res<ash::Device>,
+) {
+    render_state.current_frame = render_state.current_frame + 1;
+    if render_state.current_frame >= NUM_FRAMES_IN_FLIGHT {
+        render_state.current_frame = 0;
     }
 }
