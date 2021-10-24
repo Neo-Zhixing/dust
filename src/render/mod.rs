@@ -3,13 +3,13 @@ mod window;
 
 use std::ffi::CStr;
 
+use crate::{device_info::DeviceInfo, Queues};
 use ash::vk;
 use bevy::app::{App, AppLabel, Plugin};
 use bevy::ecs::schedule::{Stage, StageLabel};
 use bevy::ecs::world::World;
 use bevy::prelude::IntoExclusiveSystem;
 pub use window::RenderState;
-use crate::{device_info::DeviceInfo, Queues};
 
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, AppLabel)]
 pub struct RenderApp;
@@ -343,10 +343,7 @@ impl Plugin for RenderPlugin {
         render_app
             .add_stage(RenderStage::Extract, SystemStage::parallel())
             .add_stage(RenderStage::Prepare, SystemStage::parallel())
-            .add_stage(
-                RenderStage::Queue,
-                SystemStage::parallel(),
-            )
+            .add_stage(RenderStage::Queue, SystemStage::parallel())
             .add_stage(
                 RenderStage::Render,
                 SystemStage::parallel().with_system(window::render_system.exclusive_system()),

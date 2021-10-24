@@ -11,9 +11,9 @@ pub struct SwapchainImage {
     pub image: vk::Image,
     pub view: vk::ImageView,
     pub fence: vk::Fence, // This fence was borrowed from the last rendered frame.
-                          // The reason we need a separate command buffer for each swapchain image
-                          // is that cmd_begin_render_pass contains a reference to the framebuffer
-                          // which is unique to each swapchain image.
+    // The reason we need a separate command buffer for each swapchain image
+    // is that cmd_begin_render_pass contains a reference to the framebuffer
+    // which is unique to each swapchain image.
     pub desc_set: vk::DescriptorSet, // A desc set that binds to the target image.
 }
 
@@ -42,26 +42,27 @@ impl SurfaceState {
 
         let mut image_available_semaphore = [vk::Semaphore::null(); NUM_FRAMES_IN_FLIGHT as usize];
         for semaphore in image_available_semaphore.iter_mut() {
-            *semaphore = 
-                device
-                    .create_semaphore(&vk::SemaphoreCreateInfo::default(), None)
-                    .unwrap();
+            *semaphore = device
+                .create_semaphore(&vk::SemaphoreCreateInfo::default(), None)
+                .unwrap();
         }
 
         let caps = surface_loader
             .get_physical_device_surface_capabilities(physical_device, surface)
             .unwrap();
-        let desc_pool = device.create_descriptor_pool(&vk::DescriptorPoolCreateInfo::builder()
-        .flags(vk::DescriptorPoolCreateFlags::empty())
-        .max_sets(caps.max_image_count)
-        .pool_sizes(&[
-            vk::DescriptorPoolSize {
-                ty: vk::DescriptorType::STORAGE_IMAGE,
-                descriptor_count: caps.max_image_count, // Swapchain can contain any number of images >= SWAPCHAIN_LEN
-            }
-        ])
-        .build(), None).unwrap();
-
+        let desc_pool = device
+            .create_descriptor_pool(
+                &vk::DescriptorPoolCreateInfo::builder()
+                    .flags(vk::DescriptorPoolCreateFlags::empty())
+                    .max_sets(caps.max_image_count)
+                    .pool_sizes(&[vk::DescriptorPoolSize {
+                        ty: vk::DescriptorType::STORAGE_IMAGE,
+                        descriptor_count: caps.max_image_count, // Swapchain can contain any number of images >= SWAPCHAIN_LEN
+                    }])
+                    .build(),
+                None,
+            )
+            .unwrap();
 
         Self {
             surface,
@@ -78,7 +79,9 @@ impl SurfaceState {
         device: &ash::Device,
         swapchain_loader: &ash::extensions::khr::Swapchain,
     ) {
-        device.reset_descriptor_pool(self.desc_pool, vk::DescriptorPoolResetFlags::empty()).unwrap();
+        device
+            .reset_descriptor_pool(self.desc_pool, vk::DescriptorPoolResetFlags::empty())
+            .unwrap();
         for image in self.swapchain_images.iter() {
             device.destroy_image_view(image.view, None);
         }
@@ -154,34 +157,43 @@ impl SurfaceState {
         let images = swapchain_loader.get_swapchain_images(swapchain).unwrap();
         let desc_set_layouts = vec![per_window_desc_set_layout; images.len()];
 
-        let desc_sets = device.allocate_descriptor_sets(&vk::DescriptorSetAllocateInfo::builder()
-        .descriptor_pool(self.desc_pool)
-        .set_layouts(&desc_set_layouts)
-        .build()).unwrap();
+        let desc_sets = device
+            .allocate_descriptor_sets(
+                &vk::DescriptorSetAllocateInfo::builder()
+                    .descriptor_pool(self.desc_pool)
+                    .set_layouts(&desc_set_layouts)
+                    .build(),
+            )
+            .unwrap();
 
         self.swapchain_images = images
             .iter()
             .enumerate()
             .map(|(i, &image)| {
-                let view = device.create_image_view(&vk::ImageViewCreateInfo::builder()
-                .flags(vk::ImageViewCreateFlags::empty())
-                .image(image)
-                .view_type(vk::ImageViewType::TYPE_2D)
-                .format(self.format)
-                .components(vk::ComponentMapping {
-                    r: vk::ComponentSwizzle::R,
-                    g: vk::ComponentSwizzle::G,
-                    b: vk::ComponentSwizzle::B,
-                    a: vk::ComponentSwizzle::A,
-                })
-                .subresource_range(vk::ImageSubresourceRange {
-                    aspect_mask: vk::ImageAspectFlags::COLOR,
-                    base_mip_level: 0,
-                    level_count: 1,
-                    base_array_layer: 0,
-                    layer_count: 1,
-                })
-                .build(), None).unwrap();
+                let view = device
+                    .create_image_view(
+                        &vk::ImageViewCreateInfo::builder()
+                            .flags(vk::ImageViewCreateFlags::empty())
+                            .image(image)
+                            .view_type(vk::ImageViewType::TYPE_2D)
+                            .format(self.format)
+                            .components(vk::ComponentMapping {
+                                r: vk::ComponentSwizzle::R,
+                                g: vk::ComponentSwizzle::G,
+                                b: vk::ComponentSwizzle::B,
+                                a: vk::ComponentSwizzle::A,
+                            })
+                            .subresource_range(vk::ImageSubresourceRange {
+                                aspect_mask: vk::ImageAspectFlags::COLOR,
+                                base_mip_level: 0,
+                                level_count: 1,
+                                base_array_layer: 0,
+                                layer_count: 1,
+                            })
+                            .build(),
+                        None,
+                    )
+                    .unwrap();
                 SwapchainImage {
                     index: i as u32,
                     image,
@@ -191,27 +203,30 @@ impl SurfaceState {
                 }
             })
             .collect();
-        
 
-        let image_infos: Vec<vk::DescriptorImageInfo> = self.swapchain_images.iter()
-        .map(|image| vk::DescriptorImageInfo {
-            sampler: vk::Sampler::null(),
-            image_layout: vk::ImageLayout::GENERAL,
-            image_view: image.view,
-        })
-        .collect();
-        let desc_writes: Vec<vk::WriteDescriptorSet> = self.swapchain_images.iter()
-        .enumerate()
-        .map(|(i, image)| {
-            vk::WriteDescriptorSet::builder()
-            .dst_set(image.desc_set)
-            .dst_binding(0)
-            .dst_array_element(0)
-            .image_info(&image_infos[i..=i])
-            .descriptor_type(vk::DescriptorType::STORAGE_IMAGE)
-            .build()
-        })
-        .collect();
+        let image_infos: Vec<vk::DescriptorImageInfo> = self
+            .swapchain_images
+            .iter()
+            .map(|image| vk::DescriptorImageInfo {
+                sampler: vk::Sampler::null(),
+                image_layout: vk::ImageLayout::GENERAL,
+                image_view: image.view,
+            })
+            .collect();
+        let desc_writes: Vec<vk::WriteDescriptorSet> = self
+            .swapchain_images
+            .iter()
+            .enumerate()
+            .map(|(i, image)| {
+                vk::WriteDescriptorSet::builder()
+                    .dst_set(image.desc_set)
+                    .dst_binding(0)
+                    .dst_array_element(0)
+                    .image_info(&image_infos[i..=i])
+                    .descriptor_type(vk::DescriptorType::STORAGE_IMAGE)
+                    .build()
+            })
+            .collect();
         device.update_descriptor_sets(&desc_writes, &[]);
     }
 

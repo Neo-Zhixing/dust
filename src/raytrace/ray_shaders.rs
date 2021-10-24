@@ -1,7 +1,7 @@
-use bevy::{ecs::system::SystemState, prelude::*};
 use crate::device_info::DeviceInfo;
-use crate::raytrace::RaytracingNodeViewConstants;
+
 use ash::vk;
+use bevy::{ecs::system::SystemState, prelude::*};
 
 use std::io::Cursor;
 
@@ -17,39 +17,36 @@ pub struct RayShaders {
 
 impl FromWorld for RayShaders {
     fn from_world(world: &mut World) -> Self {
-        let (
-            device,
-            raytracing_loader,
-            device_info,
-            mut allocator,
-            render_state,
-        ) = SystemState::<(
-            Res<ash::Device>,
-            Res<ash::extensions::khr::RayTracingPipeline>,
-            Res<DeviceInfo>,
-            ResMut<crate::Allocator>,
-            Res<crate::render::RenderState>
-        )>::new(world)
-        .get_mut(world);
+        let (device, raytracing_loader, device_info, mut allocator, render_state) =
+            SystemState::<(
+                Res<ash::Device>,
+                Res<ash::extensions::khr::RayTracingPipeline>,
+                Res<DeviceInfo>,
+                ResMut<crate::Allocator>,
+                Res<crate::render::RenderState>,
+            )>::new(world)
+            .get_mut(world);
 
         unsafe {
-            let desc_pool = device.create_descriptor_pool(
-                &vk::DescriptorPoolCreateInfo::builder()
-                .flags(vk::DescriptorPoolCreateFlags::empty())
-                .max_sets(2)
-                .pool_sizes(&[
-                    vk::DescriptorPoolSize {
-                        ty: vk::DescriptorType::ACCELERATION_STRUCTURE_KHR,
-                        descriptor_count: 1,
-                    },
-                    vk::DescriptorPoolSize {
-                        ty: vk::DescriptorType::STORAGE_BUFFER,
-                        descriptor_count: 1,
-                    }
-                ])
-                .build(),
-                None,
-            ).unwrap();
+            let desc_pool = device
+                .create_descriptor_pool(
+                    &vk::DescriptorPoolCreateInfo::builder()
+                        .flags(vk::DescriptorPoolCreateFlags::empty())
+                        .max_sets(2)
+                        .pool_sizes(&[
+                            vk::DescriptorPoolSize {
+                                ty: vk::DescriptorType::ACCELERATION_STRUCTURE_KHR,
+                                descriptor_count: 1,
+                            },
+                            vk::DescriptorPoolSize {
+                                ty: vk::DescriptorType::STORAGE_BUFFER,
+                                descriptor_count: 1,
+                            },
+                        ])
+                        .build(),
+                    None,
+                )
+                .unwrap();
             let depth_sampler = device
                 .create_sampler(
                     &vk::SamplerCreateInfo::builder()
@@ -100,7 +97,7 @@ impl FromWorld for RayShaders {
                     &vk::PipelineLayoutCreateInfo::builder()
                         .set_layouts(&[
                             render_state.per_window_desc_set_layout,
-                            raytracing_resources_desc_layout
+                            raytracing_resources_desc_layout,
                         ])
                         .build(),
                     None,

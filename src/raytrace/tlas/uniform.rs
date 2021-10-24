@@ -23,7 +23,8 @@ unsafe impl Std140 for DeviceAddress {
 unsafe impl Zeroable for DeviceAddress {}
 unsafe impl Pod for DeviceAddress {}
 
-pub struct UniformArray { // TODO: Rename To EntityMappingTable
+pub struct UniformArray {
+    // TODO: Rename To EntityMappingTable
     staging_buf: vk::Buffer,
     device_buf: vk::Buffer,
     staging_mem: Option<MemoryBlock<vk::DeviceMemory>>,

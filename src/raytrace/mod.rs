@@ -1,19 +1,19 @@
 mod arena_alloc;
 mod block_alloc;
+mod commands;
 mod ray_shaders;
 mod sbt;
 mod svdag;
 mod tlas;
 mod vox;
-mod commands;
 
 use ash::vk;
 
 pub use tlas::Raytraced;
 pub use vox::VoxelModel;
 
-use bevy::prelude::*;
 use crate::render::{RenderApp, RenderStage};
+use bevy::prelude::*;
 
 use self::block_alloc::{
     AllocatorCreateInfo, BlockAllocator, DiscreteBlockAllocator, IntegratedBlockAllocator,
@@ -27,7 +27,6 @@ use std::sync::Arc;
 
 #[derive(Default)]
 pub struct RaytracePlugin;
-
 
 impl RaytracePlugin {
     fn add_block_allocator(&self, app: &mut App) {
@@ -85,10 +84,12 @@ impl Plugin for RaytracePlugin {
 
         app.sub_app(RenderApp)
             .init_resource::<ray_shaders::RayShaders>()
-            .add_system_to_stage(RenderStage::Queue, commands::record_raytracing_commands_system);
+            .add_system_to_stage(
+                RenderStage::Queue,
+                commands::record_raytracing_commands_system,
+            );
     }
 }
-
 
 struct RaytracingNodeViewConstants {
     pub camera_view_col0: [f32; 3],
@@ -358,7 +359,6 @@ impl Node for RaytracingNode {
 }
 
 */
-
 
 /// This system makes sure that RayShaders.target_img_desc_set always points to the correct acceleration structure and buffer
 fn update_desc_sets(

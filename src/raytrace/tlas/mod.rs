@@ -5,11 +5,7 @@ use std::mem::MaybeUninit;
 pub use uniform::UniformArray;
 
 use ash::vk;
-use bevy::{
-    ecs::system::SystemState,
-    prelude::*,
-    utils::HashMap,
-};
+use bevy::{ecs::system::SystemState, prelude::*, utils::HashMap};
 
 use crate::render::{RenderStage, RenderWorld};
 use gpu_alloc_ash::AshMemoryDevice;

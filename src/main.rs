@@ -14,10 +14,7 @@ fn main() {
         .add_startup_system(setup)
         .run();
 }
-fn setup(
-    mut commands: Commands,
-    asset_server: Res<AssetServer>,
-) {
+fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
     let scene_handle: Handle<dust_new::VoxelModel> = asset_server.load("castle.vox");
     let watertank_handle: Handle<dust_new::VoxelModel> = asset_server.load("water_tank.vox");
 
@@ -50,4 +47,4 @@ fn setup(
         .insert(GlobalTransform::default())
         .insert(Transform::from_xyz(1.0, 2.0, 3.0));
         */
-    }
+}

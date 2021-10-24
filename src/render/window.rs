@@ -72,23 +72,26 @@ impl RenderState {
                 command_buffer: command_buffers[i],
             });
         }
-        let per_window_desc_set_layout = device.create_descriptor_set_layout(&vk::DescriptorSetLayoutCreateInfo::builder()
-        .flags(vk::DescriptorSetLayoutCreateFlags::empty())
-        .bindings(&[
-            vk::DescriptorSetLayoutBinding::builder()
-            .binding(0)
-            .descriptor_type(vk::DescriptorType::STORAGE_IMAGE)
-            .descriptor_count(1)
-            .stage_flags(vk::ShaderStageFlags::RAYGEN_KHR)
-            .build()
-        ])
-        .build(), None).unwrap();
+        let per_window_desc_set_layout = device
+            .create_descriptor_set_layout(
+                &vk::DescriptorSetLayoutCreateInfo::builder()
+                    .flags(vk::DescriptorSetLayoutCreateFlags::empty())
+                    .bindings(&[vk::DescriptorSetLayoutBinding::builder()
+                        .binding(0)
+                        .descriptor_type(vk::DescriptorType::STORAGE_IMAGE)
+                        .descriptor_count(1)
+                        .stage_flags(vk::ShaderStageFlags::RAYGEN_KHR)
+                        .build()])
+                    .build(),
+                None,
+            )
+            .unwrap();
         Self {
             windows: HashMap::default(),
             current_frame: 0,
             frames_in_flight: std::mem::transmute(frames_in_flight),
             command_pool,
-            per_window_desc_set_layout
+            per_window_desc_set_layout,
         }
     }
 
@@ -217,9 +220,16 @@ pub fn prepare_windows(
                     );
                 }
                 state
-            }
+            },
             None => unsafe {
-                let mut state = SurfaceState::new(&entry, &instance, &device, *physical_device, &surface_loader, &window.handle);
+                let mut state = SurfaceState::new(
+                    &entry,
+                    &instance,
+                    &device,
+                    *physical_device,
+                    &surface_loader,
+                    &window.handle,
+                );
                 state.build_swapchain(
                     render_state.per_window_desc_set_layout,
                     &instance,

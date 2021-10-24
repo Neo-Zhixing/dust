@@ -10,8 +10,8 @@
 
 mod device_info;
 mod queues;
-mod render;
 mod raytrace;
+mod render;
 mod util;
 
 pub use raytrace::VoxelModel;
@@ -31,6 +31,6 @@ pub struct DustPlugin;
 impl Plugin for DustPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugin(render::RenderPlugin::default())
-        .add_plugin(raytrace::RaytracePlugin::default());
+            .add_plugin(raytrace::RaytracePlugin::default());
     }
 }

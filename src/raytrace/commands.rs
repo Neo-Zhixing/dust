@@ -1,5 +1,5 @@
-use ash::vk;
 use crate::raytrace::RayShaders;
+use ash::vk;
 use bevy::ecs::prelude::*;
 
 use crate::render::RenderState;
@@ -42,10 +42,7 @@ pub fn record_raytracing_commands_system(
 
     unsafe {
         device
-            .reset_command_buffer(
-                command_buffer,
-                vk::CommandBufferResetFlags::empty(),
-            )
+            .reset_command_buffer(command_buffer, vk::CommandBufferResetFlags::empty())
             .unwrap();
         device
             .begin_command_buffer(
@@ -65,8 +62,11 @@ pub fn record_raytracing_commands_system(
             vk::PipelineBindPoint::RAY_TRACING_KHR,
             ray_shaders.pipeline_layout,
             0,
-            &[swapchain_image.desc_set, ray_shaders.raytracing_resources_desc_set],
-            &[]
+            &[
+                swapchain_image.desc_set,
+                ray_shaders.raytracing_resources_desc_set,
+            ],
+            &[],
         );
 
         // Sync entity mapping table
@@ -80,7 +80,6 @@ pub fn record_raytracing_commands_system(
                 size: entity_mapping_table.get_full_size(),
             }],
         );
-
 
         device.cmd_pipeline_barrier(
             command_buffer,
