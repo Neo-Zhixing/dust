@@ -11,10 +11,8 @@ pub fn record_raytracing_commands_system(
     entity_mapping_table: Res<super::tlas::UniformArray>,
     raytracing_pipeline_loader: Res<ash::extensions::khr::RayTracingPipeline>,
     queues: Res<crate::Queues>,
+    tlas_state: Res<super::TlasState>,
 ) {
-    if entity_mapping_table.is_empty() {
-        return;
-    }
     let current_frame = render_state.current_frame().clone();
     assert_eq!(
         render_state.windows.len(),
@@ -40,6 +38,46 @@ pub fn record_raytracing_commands_system(
         .as_ref()
         .expect("Record commands: Cannot find the swapchain image");
 
+    if entity_mapping_table.is_empty() {
+        unsafe {
+            device
+                .reset_command_buffer(command_buffer, vk::CommandBufferResetFlags::empty())
+                .unwrap();
+            record_empty_command_buffer(command_buffer, &device, &queues, swapchain_image.image)
+        }
+
+        return;
+    }
+
+    unsafe {
+        let mut write_desc_set_as_ext = vk::WriteDescriptorSetAccelerationStructureKHR::default();
+        write_desc_set_as_ext.acceleration_structure_count = 1;
+        write_desc_set_as_ext.p_acceleration_structures = &tlas_state.tlas;
+        let mut write_desc_set_as = vk::WriteDescriptorSet::builder()
+            .dst_set(swapchain_image.desc_set)
+            .dst_binding(2)
+            .descriptor_type(vk::DescriptorType::ACCELERATION_STRUCTURE_KHR)
+            .build();
+        write_desc_set_as.p_next = &write_desc_set_as_ext as *const _ as *const std::ffi::c_void;
+        write_desc_set_as.descriptor_count = 1;
+        device.update_descriptor_sets(
+            &[
+                write_desc_set_as,
+                vk::WriteDescriptorSet::builder()
+                    .dst_set(swapchain_image.desc_set)
+                    .dst_binding(3)
+                    .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
+                    .buffer_info(&[vk::DescriptorBufferInfo {
+                        buffer: entity_mapping_table.get_buffer(),
+                        range: entity_mapping_table.get_full_size(),
+                        offset: 0,
+                    }])
+                    .build(),
+            ],
+            &[],
+        );
+    }
+
     unsafe {
         device
             .reset_command_buffer(command_buffer, vk::CommandBufferResetFlags::empty())
@@ -62,10 +100,7 @@ pub fn record_raytracing_commands_system(
             vk::PipelineBindPoint::RAY_TRACING_KHR,
             ray_shaders.pipeline_layout,
             0,
-            &[
-                swapchain_image.desc_set,
-                ray_shaders.raytracing_resources_desc_set,
-            ],
+            &[swapchain_image.desc_set],
             &[],
         );
 
@@ -139,8 +174,47 @@ pub fn record_raytracing_commands_system(
                 })
                 .build()],
         );
-        device
-            .end_command_buffer(current_frame.command_buffer)
-            .unwrap();
+        device.end_command_buffer(command_buffer).unwrap();
     }
+}
+
+unsafe fn record_empty_command_buffer(
+    command_buffer: vk::CommandBuffer,
+    device: &ash::Device,
+    queues: &crate::Queues,
+    image: vk::Image,
+) {
+    device
+        .begin_command_buffer(
+            command_buffer,
+            &vk::CommandBufferBeginInfo::builder()
+                .flags(vk::CommandBufferUsageFlags::empty())
+                .build(),
+        )
+        .unwrap();
+    device.cmd_pipeline_barrier(
+        command_buffer,
+        vk::PipelineStageFlags::TOP_OF_PIPE,
+        vk::PipelineStageFlags::BOTTOM_OF_PIPE,
+        vk::DependencyFlags::BY_REGION,
+        &[],
+        &[],
+        &[vk::ImageMemoryBarrier::builder()
+            .src_access_mask(vk::AccessFlags::NONE_KHR)
+            .dst_access_mask(vk::AccessFlags::NONE_KHR)
+            .old_layout(vk::ImageLayout::UNDEFINED)
+            .new_layout(vk::ImageLayout::PRESENT_SRC_KHR)
+            .src_queue_family_index(queues.graphics_queue_family)
+            .dst_queue_family_index(queues.graphics_queue_family)
+            .image(image)
+            .subresource_range(vk::ImageSubresourceRange {
+                aspect_mask: vk::ImageAspectFlags::COLOR,
+                base_mip_level: 0,
+                level_count: 1,
+                base_array_layer: 0,
+                layer_count: 1,
+            })
+            .build()],
+    );
+    device.end_command_buffer(command_buffer).unwrap();
 }

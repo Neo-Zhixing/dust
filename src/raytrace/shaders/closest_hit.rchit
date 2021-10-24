@@ -3,7 +3,7 @@
 
 #include "shared.glsl"
 
-layout(set = 1, binding = 0) uniform accelerationStructureEXT accelerationStructure;
+layout(set = 0, binding = 2) uniform accelerationStructureEXT accelerationStructure;
 layout(location = 0) rayPayloadInEXT RayPayload payload;
 layout(location = 1) rayPayloadEXT ShadowRayPayload shadowRayPayload;
 hitAttributeEXT HitAttributes hitAttributes;

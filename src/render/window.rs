@@ -76,12 +76,29 @@ impl RenderState {
             .create_descriptor_set_layout(
                 &vk::DescriptorSetLayoutCreateInfo::builder()
                     .flags(vk::DescriptorSetLayoutCreateFlags::empty())
-                    .bindings(&[vk::DescriptorSetLayoutBinding::builder()
-                        .binding(0)
-                        .descriptor_type(vk::DescriptorType::STORAGE_IMAGE)
-                        .descriptor_count(1)
-                        .stage_flags(vk::ShaderStageFlags::RAYGEN_KHR)
-                        .build()])
+                    .bindings(&[
+                        vk::DescriptorSetLayoutBinding::builder()
+                            .binding(0)
+                            .descriptor_type(vk::DescriptorType::STORAGE_IMAGE)
+                            .descriptor_count(1)
+                            .stage_flags(vk::ShaderStageFlags::RAYGEN_KHR)
+                            .build(),
+                        vk::DescriptorSetLayoutBinding::builder()
+                            .binding(2)
+                            .descriptor_type(vk::DescriptorType::ACCELERATION_STRUCTURE_KHR)
+                            .descriptor_count(1)
+                            .stage_flags(
+                                vk::ShaderStageFlags::RAYGEN_KHR
+                                    | vk::ShaderStageFlags::CLOSEST_HIT_KHR,
+                            )
+                            .build(),
+                        vk::DescriptorSetLayoutBinding::builder()
+                            .binding(3)
+                            .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
+                            .descriptor_count(1)
+                            .stage_flags(vk::ShaderStageFlags::INTERSECTION_KHR)
+                            .build(),
+                    ])
                     .build(),
                 None,
             )
