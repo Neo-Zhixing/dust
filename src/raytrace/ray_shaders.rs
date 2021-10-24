@@ -1,45 +1,55 @@
 use bevy::{ecs::system::SystemState, prelude::*};
-
-use super::block_alloc::BlockAllocator;
-use super::tlas::TlasState;
 use crate::device_info::DeviceInfo;
 use crate::raytrace::RaytracingNodeViewConstants;
 use ash::vk;
 
 use std::io::Cursor;
-use std::sync::Arc;
 
 pub struct RayShaders {
     pub pipeline: vk::Pipeline,
     pub pipeline_layout: vk::PipelineLayout,
-    pub target_img_desc_layout: vk::DescriptorSetLayout,
-    pub target_img_desc_set: vk::DescriptorSet,
+    pub raytracing_resources_desc_layout: vk::DescriptorSetLayout,
+    pub raytracing_resources_desc_set: vk::DescriptorSet,
     pub sbt: super::sbt::Sbt,
     pub depth_sampler: vk::Sampler,
+    pub desc_pool: vk::DescriptorPool,
 }
 
 impl FromWorld for RayShaders {
     fn from_world(world: &mut World) -> Self {
         let (
-            _tlas_state,
-            _block_allocator,
             device,
             raytracing_loader,
             device_info,
             mut allocator,
-            desc_pool,
+            render_state,
         ) = SystemState::<(
-            Res<TlasState>,
-            Res<Arc<dyn BlockAllocator>>,
             Res<ash::Device>,
             Res<ash::extensions::khr::RayTracingPipeline>,
             Res<DeviceInfo>,
             ResMut<crate::Allocator>,
-            Res<vk::DescriptorPool>,
+            Res<crate::render::RenderState>
         )>::new(world)
         .get_mut(world);
 
         unsafe {
+            let desc_pool = device.create_descriptor_pool(
+                &vk::DescriptorPoolCreateInfo::builder()
+                .flags(vk::DescriptorPoolCreateFlags::empty())
+                .max_sets(2)
+                .pool_sizes(&[
+                    vk::DescriptorPoolSize {
+                        ty: vk::DescriptorType::ACCELERATION_STRUCTURE_KHR,
+                        descriptor_count: 1,
+                    },
+                    vk::DescriptorPoolSize {
+                        ty: vk::DescriptorType::STORAGE_BUFFER,
+                        descriptor_count: 1,
+                    }
+                ])
+                .build(),
+                None,
+            ).unwrap();
             let depth_sampler = device
                 .create_sampler(
                     &vk::SamplerCreateInfo::builder()
@@ -50,62 +60,48 @@ impl FromWorld for RayShaders {
                     None,
                 )
                 .unwrap();
-            let target_img_desc_layout = device
+            let raytracing_resources_desc_layout = device
                 .create_descriptor_set_layout(
                     &vk::DescriptorSetLayoutCreateInfo::builder()
                         .bindings(&[
                             vk::DescriptorSetLayoutBinding::builder()
                                 .binding(0)
-                                .descriptor_type(vk::DescriptorType::STORAGE_IMAGE)
-                                .descriptor_count(1)
-                                .stage_flags(vk::ShaderStageFlags::RAYGEN_KHR)
-                                .build(),
-                            vk::DescriptorSetLayoutBinding::builder()
-                                .binding(1)
-                                .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
-                                .descriptor_count(1)
-                                .stage_flags(vk::ShaderStageFlags::RAYGEN_KHR)
-                                .build(),
-                            vk::DescriptorSetLayoutBinding::builder()
-                                .binding(2)
                                 .descriptor_type(vk::DescriptorType::ACCELERATION_STRUCTURE_KHR)
                                 .descriptor_count(1)
                                 .stage_flags(
                                     vk::ShaderStageFlags::RAYGEN_KHR
                                         | vk::ShaderStageFlags::CLOSEST_HIT_KHR,
                                 )
-                                .build(),
+                                .build(), // Acceleration Structure
                             vk::DescriptorSetLayoutBinding::builder()
-                                .binding(3)
+                                .binding(1)
                                 .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
                                 .descriptor_count(1)
                                 .stage_flags(vk::ShaderStageFlags::INTERSECTION_KHR)
-                                .build(),
+                                .build(), // Octree Nodes
                         ])
                         .build(),
                     None,
                 )
                 .unwrap();
-            let mut target_img_desc_set = vk::DescriptorSet::null();
+            let mut raytracing_resources_desc_set = vk::DescriptorSet::null();
             let result = device.fp_v1_0().allocate_descriptor_sets(
                 device.handle(),
                 &vk::DescriptorSetAllocateInfo::builder()
-                    .descriptor_pool(*desc_pool)
-                    .set_layouts(&[target_img_desc_layout])
+                    .descriptor_pool(desc_pool)
+                    .set_layouts(&[raytracing_resources_desc_layout])
                     .build(),
-                &mut target_img_desc_set,
+                &mut raytracing_resources_desc_set,
             );
             assert_eq!(result, vk::Result::SUCCESS);
 
             let pipeline_layout = device
                 .create_pipeline_layout(
                     &vk::PipelineLayoutCreateInfo::builder()
-                        .set_layouts(&[target_img_desc_layout])
-                        .push_constant_ranges(&[vk::PushConstantRange {
-                            stage_flags: vk::ShaderStageFlags::RAYGEN_KHR,
-                            offset: 0,
-                            size: std::mem::size_of::<RaytracingNodeViewConstants>() as u32,
-                        }])
+                        .set_layouts(&[
+                            render_state.per_window_desc_set_layout,
+                            raytracing_resources_desc_layout
+                        ])
                         .build(),
                     None,
                 )
@@ -165,10 +161,11 @@ impl FromWorld for RayShaders {
             RayShaders {
                 pipeline: raytracing_pipeline,
                 pipeline_layout,
-                target_img_desc_layout,
-                target_img_desc_set,
                 sbt,
                 depth_sampler,
+                raytracing_resources_desc_layout,
+                raytracing_resources_desc_set,
+                desc_pool,
             }
         }
     }

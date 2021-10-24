@@ -25,7 +25,7 @@ struct InstanceInfo {
     BlockAllocatorAddressSpace addressSpace;
     uint parentIndex;
 };
-layout(set = 0, binding = 3) readonly buffer InstanceInfoBuffer {
+layout(set = 1, binding = 1) readonly buffer InstanceInfoBuffer {
     InstanceInfo InstanceInfoList[];
 };
 

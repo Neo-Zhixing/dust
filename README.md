@@ -1,2 +1,2 @@
-- Find out how to listen to asset loading events, and rebuild tlas when that happens
+- Resolve command buffer issue
 - Deallocate existing tlas assets

@@ -14,61 +14,16 @@ fn main() {
         .add_startup_system(setup)
         .run();
 }
-
-use bevy::pbr2::{DirectionalLight, DirectionalLightBundle, PbrBundle, StandardMaterial};
-use bevy::render2::color::Color;
-use bevy::render2::mesh::shape;
-use bevy::render2::mesh::Mesh;
 fn setup(
     mut commands: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
     asset_server: Res<AssetServer>,
 ) {
     let scene_handle: Handle<dust_new::VoxelModel> = asset_server.load("castle.vox");
     let watertank_handle: Handle<dust_new::VoxelModel> = asset_server.load("water_tank.vox");
 
-    commands.spawn_bundle(PbrBundle {
-        mesh: meshes.add(Mesh::from(shape::Torus::default())),
-        material: materials.add(StandardMaterial {
-            base_color: Color::PINK,
-            ..Default::default()
-        }),
-        transform: Transform::from_xyz(0.5, 0.0, 0.5),
-        ..Default::default()
-    });
-
     // directional 'sun' light
     const HALF_SIZE: f32 = 10.0;
-    commands.spawn_bundle(DirectionalLightBundle {
-        directional_light: DirectionalLight {
-            // Configure the projection to better fit the scene
-            shadow_projection: bevy::render2::camera::OrthographicProjection {
-                left: -HALF_SIZE,
-                right: HALF_SIZE,
-                bottom: -HALF_SIZE,
-                top: HALF_SIZE,
-                near: -10.0 * HALF_SIZE,
-                far: 10.0 * HALF_SIZE,
-                ..Default::default()
-            },
-            ..Default::default()
-        },
-        transform: Transform {
-            translation: Vec3::new(0.0, 2.0, 0.0),
-            rotation: Quat::from_rotation_x(-std::f32::consts::FRAC_PI_4),
-            ..Default::default()
-        },
-        ..Default::default()
-    });
-
     // camera
-    commands
-        .spawn_bundle(bevy::render2::camera::PerspectiveCameraBundle {
-            transform: Transform::from_xyz(-2.0, 2.5, 5.0).looking_at(Vec3::ZERO, Vec3::Y),
-            ..Default::default()
-        })
-        .insert(flycamera::FlyCamera::default());
 
     commands
         .spawn()
@@ -95,4 +50,4 @@ fn setup(
         .insert(GlobalTransform::default())
         .insert(Transform::from_xyz(1.0, 2.0, 3.0));
         */
-}
+    }

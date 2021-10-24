@@ -1,27 +1,24 @@
 mod arena_alloc;
 mod block_alloc;
-mod ray_pass_driver;
 mod ray_shaders;
 mod sbt;
 mod svdag;
 mod tlas;
 mod vox;
+mod commands;
 
 use ash::vk;
 
-use bevy::render2::camera::PerspectiveProjection;
-use bevy::render2::view::ExtractedView;
 pub use tlas::Raytraced;
 pub use vox::VoxelModel;
 
 use bevy::prelude::*;
-use bevy::render2::render_graph::{Node, RenderGraph, SlotInfo, SlotType};
-use bevy::render2::{RenderApp, RenderStage};
+use crate::render::{RenderApp, RenderStage};
 
 use self::block_alloc::{
     AllocatorCreateInfo, BlockAllocator, DiscreteBlockAllocator, IntegratedBlockAllocator,
 };
-use self::ray_shaders::RayShaders;
+pub use self::ray_shaders::RayShaders;
 use self::tlas::TlasState;
 use crate::device_info::DeviceInfo;
 use crate::Queues;
@@ -31,14 +28,6 @@ use std::sync::Arc;
 #[derive(Default)]
 pub struct RaytracePlugin;
 
-mod raytracing_graph {
-    pub const NAME: &str = "ray_pass";
-    pub mod input {
-        pub const VIEW_ENTITY: &str = "view_entity";
-        pub const RENDER_TARGET: &str = "render_target";
-        pub const DEPTH: &str = "depth";
-    }
-}
 
 impl RaytracePlugin {
     fn add_block_allocator(&self, app: &mut App) {
@@ -88,81 +77,18 @@ impl RaytracePlugin {
 impl Plugin for RaytracePlugin {
     fn build(&self, app: &mut App) {
         let render_app = app.sub_app(RenderApp);
-
-        let raytracing_node = RaytracingNode::new(&mut render_app.world);
-
-        let mut raytracing_graph = RenderGraph::default();
-        raytracing_graph.add_node(RaytracingNode::NAME, raytracing_node);
-
-        let input_node_id = raytracing_graph.set_input(vec![
-            SlotInfo::new(raytracing_graph::input::VIEW_ENTITY, SlotType::Entity),
-            SlotInfo::new(
-                raytracing_graph::input::RENDER_TARGET,
-                SlotType::TextureView,
-            ),
-            SlotInfo::new(raytracing_graph::input::DEPTH, SlotType::TextureView),
-        ]);
-
-        raytracing_graph
-            .add_slot_edge(
-                input_node_id,
-                raytracing_graph::input::RENDER_TARGET,
-                RaytracingNode::NAME,
-                RaytracingNode::IN_COLOR_ATTACHMENT,
-            )
-            .unwrap();
-        raytracing_graph
-            .add_slot_edge(
-                input_node_id,
-                raytracing_graph::input::DEPTH,
-                RaytracingNode::NAME,
-                RaytracingNode::IN_DEPTH,
-            )
-            .unwrap();
-        raytracing_graph
-            .add_slot_edge(
-                input_node_id,
-                raytracing_graph::input::VIEW_ENTITY,
-                RaytracingNode::NAME,
-                RaytracingNode::IN_VIEW,
-            )
-            .unwrap();
-
-        let mut graph = render_app.world.get_resource_mut::<RenderGraph>().unwrap();
-        graph.add_sub_graph(raytracing_graph::NAME, raytracing_graph);
-        graph.add_node(
-            ray_pass_driver::RayPassDriverNode::NAME,
-            ray_pass_driver::RayPassDriverNode,
-        );
-        graph
-            .add_node_edge(
-                bevy::core_pipeline::node::MAIN_PASS_DRIVER,
-                ray_pass_driver::RayPassDriverNode::NAME,
-            )
-            .unwrap();
-
         render_app.add_plugin(tlas::TlasPlugin::default());
-        render_app.add_system_to_stage(RenderStage::Queue, update_desc_sets);
+        render_app.add_system_to_stage(RenderStage::Prepare, update_desc_sets);
 
         self.add_block_allocator(app);
         app.add_plugin(vox::VoxPlugin::default());
 
         app.sub_app(RenderApp)
-            .init_resource::<ray_shaders::RayShaders>();
+            .init_resource::<ray_shaders::RayShaders>()
+            .add_system_to_stage(RenderStage::Queue, commands::record_raytracing_commands_system);
     }
 }
 
-pub struct RaytracingNode {}
-
-impl RaytracingNode {
-    const NAME: &'static str = "main_pass";
-    pub const IN_COLOR_ATTACHMENT: &'static str = "color_attachment";
-    pub const IN_DEPTH: &'static str = "depth";
-    pub const IN_VIEW: &'static str = "view";
-    pub fn new(_world: &mut World) -> Self {
-        RaytracingNode {}
-    }
-}
 
 struct RaytracingNodeViewConstants {
     pub camera_view_col0: [f32; 3],
@@ -175,6 +101,8 @@ struct RaytracingNodeViewConstants {
     pub camera_position: Vec3,
     pub tan_half_fov: f32,
 }
+
+/*
 
 impl Node for RaytracingNode {
     fn input(&self) -> Vec<SlotInfo> {
@@ -429,6 +357,10 @@ impl Node for RaytracingNode {
     }
 }
 
+*/
+
+
+/// This system makes sure that RayShaders.target_img_desc_set always points to the correct acceleration structure and buffer
 fn update_desc_sets(
     ray_shaders: Res<RayShaders>,
     tlas_state: Res<TlasState>,
@@ -443,24 +375,18 @@ fn update_desc_sets(
         write_desc_set_as_ext.acceleration_structure_count = 1;
         write_desc_set_as_ext.p_acceleration_structures = &tlas_state.tlas;
         let mut write_desc_set_as = vk::WriteDescriptorSet::builder()
-            .dst_set(ray_shaders.target_img_desc_set)
-            .dst_binding(2)
+            .dst_set(ray_shaders.raytracing_resources_desc_set)
+            .dst_binding(0)
             .descriptor_type(vk::DescriptorType::ACCELERATION_STRUCTURE_KHR)
             .build();
         write_desc_set_as.p_next = &write_desc_set_as_ext as *const _ as *const std::ffi::c_void;
         write_desc_set_as.descriptor_count = 1;
-        device.device_wait_idle().unwrap();
-        println!(
-            "Update to buffer {:?} with size {}",
-            uniform_arr.get_buffer(),
-            uniform_arr.get_full_size()
-        );
         device.update_descriptor_sets(
             &[
                 write_desc_set_as,
                 vk::WriteDescriptorSet::builder()
-                    .dst_set(ray_shaders.target_img_desc_set)
-                    .dst_binding(3)
+                    .dst_set(ray_shaders.raytracing_resources_desc_set)
+                    .dst_binding(1)
                     .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
                     .buffer_info(&[vk::DescriptorBufferInfo {
                         buffer: uniform_arr.get_buffer(),

@@ -6,16 +6,13 @@
 
 layout(location = 0) rayPayloadEXT RayPayload payload;
 layout(set = 0, binding = 0) uniform writeonly image2D imgOutput;
-layout(set = 0, binding = 1) uniform sampler2D depthTexture;
-layout(set = 0, binding = 2) uniform accelerationStructureEXT accelerationStructure;
-layout(push_constant) uniform constants {
-  mat3 rotation;
-  vec3 position;
-  float tanHalfFov;
-} PushConstants;
-
+//layout(set = 0, binding = 1) uniform sampler2D depthTexture;
+layout(set = 1, binding = 0) uniform accelerationStructureEXT accelerationStructure;
 
 void main() {
+    imageStore(imgOutput, ivec2(gl_LaunchIDEXT.xy), vec4(0.5, 1.0, 0.0, 1.0));
+    /*
+return;
     const vec2 pixelNDC = (vec2(gl_LaunchIDEXT.xy) + vec2(0.5)) / vec2(gl_LaunchSizeEXT.xy);
     const float near = 0.1; // Near plane was assumed to be at 0.1
     float z = near / texture(depthTexture, pixelNDC).r; // depth obtained from rasterization
@@ -47,4 +44,5 @@ void main() {
   if (payload.didHit) {
     imageStore(imgOutput, ivec2(gl_LaunchIDEXT.xy), vec4(payload.color, 1.0));
   }
+  */
 }

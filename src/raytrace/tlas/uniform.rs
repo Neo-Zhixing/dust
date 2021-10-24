@@ -23,7 +23,7 @@ unsafe impl Std140 for DeviceAddress {
 unsafe impl Zeroable for DeviceAddress {}
 unsafe impl Pod for DeviceAddress {}
 
-pub struct UniformArray {
+pub struct UniformArray { // TODO: Rename To EntityMappingTable
     staging_buf: vk::Buffer,
     device_buf: vk::Buffer,
     staging_mem: Option<MemoryBlock<vk::DeviceMemory>>,
@@ -44,6 +44,9 @@ impl UniformArray {
             capacity: 0,
             staging_ptr: std::ptr::null_mut(),
         }
+    }
+    pub fn is_empty(&self) -> bool {
+        self.capacity == 0
     }
     unsafe fn resize_and_clear(
         &mut self,

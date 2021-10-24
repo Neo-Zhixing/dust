@@ -8,9 +8,10 @@ use ash::vk;
 use bevy::{
     ecs::system::SystemState,
     prelude::*,
-    render2::{RenderStage, RenderWorld},
     utils::HashMap,
 };
+
+use crate::render::{RenderStage, RenderWorld};
 use gpu_alloc_ash::AshMemoryDevice;
 
 use crate::{device_info::DeviceInfo, raytrace::tlas::uniform::UniformEntry, Queues, VoxelModel};
@@ -34,14 +35,13 @@ impl Plugin for TlasPlugin {
 }
 
 fn tlas_setup(app: &mut App) {
-    let (device, mut allocator, queues, device_info, acceleration_structure_loader, _desc_pool) =
+    let (device, mut allocator, queues, device_info, acceleration_structure_loader) =
         SystemState::<(
             Res<ash::Device>,
             ResMut<crate::Allocator>,
             Res<Queues>,
             Res<DeviceInfo>,
             Res<ash::extensions::khr::AccelerationStructure>,
-            Res<vk::DescriptorPool>,
         )>::new(&mut app.world)
         .get_mut(&mut app.world);
 
