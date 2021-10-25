@@ -11,7 +11,6 @@ use bevy::window::{WindowId, Windows};
 use std::ffi::c_void;
 use std::mem::MaybeUninit;
 use std::ops::DerefMut;
-use std::ptr::NonNull;
 
 use super::swapchain::SurfaceState;
 pub const NUM_FRAMES_IN_FLIGHT: u32 = 3;
@@ -161,7 +160,7 @@ impl RenderState {
                 requirements.alignment as usize,
             )
             .unwrap();
-            let (full_layout, spacing) = layout.repeat(frames_in_flight.len()).unwrap();
+            let (full_layout, _spacing) = layout.repeat(frames_in_flight.len()).unwrap();
             let mut mem = allocator.alloc_with_device(
                 device,
                 Request {

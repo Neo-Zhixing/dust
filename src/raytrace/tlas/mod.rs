@@ -350,7 +350,8 @@ fn tlas_update(
     // do updates
     let data: Vec<_> = entities_query
         .iter()
-        .filter(|(_, _, model)| !voxel_models.get(*model).is_none())
+        // Make sure that the model was loaded
+        .filter(|(_, _, model)| voxel_models.get(*model).is_some())
         .map(|(transform, aabb, model_handle)| {
             let custom_index: u32 =
                 if let Some(index) = model_to_index.get(&Handle::weak(model_handle.id)) {
@@ -391,6 +392,7 @@ fn tlas_update(
         })
         .collect();
     if data.len() == 0 {
+        // No entity exist in the scene.
         unsafe {
             // TODO: figure out a way to delete the AS
             if state.tlas_buf != vk::Buffer::null() {
@@ -415,6 +417,7 @@ fn tlas_update(
     }
 
     unsafe {
+        // Update the entity mapping table.
         uniform_arr.write(
             models_in_use.iter().map(|handle| {
                 let model = voxel_models.get(handle).unwrap(); // We already made sure that the model was loaded.

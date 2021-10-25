@@ -1,4 +1,4 @@
-use crate::{raytrace::RayShaders, render};
+use crate::raytrace::RayShaders;
 use ash::vk;
 use bevy::ecs::prelude::*;
 
@@ -12,7 +12,6 @@ pub(super) fn record_raytracing_commands_system(
     raytracing_pipeline_loader: Res<ash::extensions::khr::RayTracingPipeline>,
     queues: Res<crate::Queues>,
     tlas_state: Res<super::TlasState>,
-    view_constants: Res<super::RaytracingNodeViewConstants>,
 ) {
     let current_frame = render_state.current_frame().clone();
     assert_eq!(

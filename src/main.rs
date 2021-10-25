@@ -2,11 +2,8 @@ use bevy::prelude::*;
 use dust_new::PerspectiveCamera;
 use dust_new::Raytraced;
 mod flycamera;
-use bevy::{
-    input::{keyboard::KeyCode, Input},
-};
+use bevy::input::{keyboard::KeyCode, Input};
 mod fps_counter;
-
 
 fn main() {
     App::new()
@@ -71,13 +68,12 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
 struct Watertank;
 fn watertank_move_system(
     time: Res<Time>,
-    mut query: Query<(&mut Transform), With<Watertank>>,
-    keyboard_input: Res<Input<KeyCode>>
+    mut query: Query<&mut Transform, With<Watertank>>,
+    keyboard_input: Res<Input<KeyCode>>,
 ) {
     if keyboard_input.pressed(KeyCode::J) {
         for mut entity in query.iter_mut() {
             entity.translation.y = time.time_since_startup().as_secs_f32().cos() * 10.0 + 20.0;
         }
     }
-
 }

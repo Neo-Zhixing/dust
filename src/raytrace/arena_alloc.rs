@@ -260,8 +260,6 @@ impl<T: ArenaAllocated> ArenaAllocator<T> {
 mod tests {
     use super::*;
 
-    use std::mem::size_of;
-
     impl ArenaAllocated for u128 {}
 
     #[test]

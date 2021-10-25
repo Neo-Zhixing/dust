@@ -37,12 +37,10 @@ pub fn fps_counter(time: Res<Time>, mut counter: ResMut<FPSCounter>, mut windows
     //println!("Bevy demo (fps: {})", fps);
 }
 
-
 pub struct FPSCounterPlugin;
 
 impl Plugin for FPSCounterPlugin {
     fn build(&self, app: &mut App) {
-        app.init_resource::<FPSCounter>()
-            .add_system(fps_counter);
+        app.init_resource::<FPSCounter>().add_system(fps_counter);
     }
 }
