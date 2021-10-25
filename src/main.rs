@@ -2,6 +2,12 @@ use bevy::prelude::*;
 use dust_new::PerspectiveCamera;
 use dust_new::Raytraced;
 mod flycamera;
+use bevy::{
+    input::{keyboard::KeyCode, Input},
+};
+
+
+
 fn main() {
     App::new()
         .add_plugin(bevy::core::CorePlugin::default())
@@ -13,6 +19,7 @@ fn main() {
         .add_plugin(bevy::winit::WinitPlugin::default())
         .add_plugin(flycamera::FlyCameraPlugin)
         .add_startup_system(setup)
+        .add_system(watertank_move_system)
         .run();
 }
 fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
@@ -38,9 +45,10 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
         })
         .insert(watertank_handle)
         .insert(GlobalTransform::default())
+        .insert(Watertank)
         .insert(Transform::from_xyz(10.0, 15.0, 10.0));
-    
-    let mut transform = Transform::from_xyz(-1.0, -1.0, -1.0);
+
+    let mut transform = Transform::from_xyz(64.0, 64.0, 64.0);
     transform.look_at(Vec3::new(128.0, 128.0, 128.0), Vec3::Y);
     commands
         .spawn()
@@ -57,4 +65,18 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
         .insert(GlobalTransform::default())
         .insert(Transform::from_xyz(1.0, 2.0, 3.0));
         */
+}
+
+struct Watertank;
+fn watertank_move_system(
+    time: Res<Time>,
+    mut query: Query<(&mut Transform), With<Watertank>>,
+    keyboard_input: Res<Input<KeyCode>>
+) {
+    if keyboard_input.pressed(KeyCode::J) {
+        for mut entity in query.iter_mut() {
+            entity.translation.y = time.time_since_startup().as_secs_f32().cos() * 10.0 + 20.0;
+        }
+    }
+
 }

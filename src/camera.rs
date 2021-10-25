@@ -2,7 +2,6 @@ use bevy::ecs::reflect::ReflectComponent;
 use bevy::math::Mat4;
 use bevy::reflect::{Reflect, ReflectDeserialize};
 
-
 #[derive(Debug, Clone, Reflect)]
 #[reflect(Component)]
 pub struct PerspectiveCamera {
