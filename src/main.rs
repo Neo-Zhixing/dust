@@ -5,7 +5,7 @@ mod flycamera;
 use bevy::{
     input::{keyboard::KeyCode, Input},
 };
-
+mod fps_counter;
 
 
 fn main() {
@@ -18,6 +18,7 @@ fn main() {
         .add_plugin(dust_new::DustPlugin::default())
         .add_plugin(bevy::winit::WinitPlugin::default())
         .add_plugin(flycamera::FlyCameraPlugin)
+        .add_plugin(fps_counter::FPSCounterPlugin)
         .add_startup_system(setup)
         .add_system(watertank_move_system)
         .run();
