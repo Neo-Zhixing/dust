@@ -1,3 +1,4 @@
+mod recycle;
 mod swapchain;
 mod window;
 
@@ -9,6 +10,7 @@ use bevy::app::{App, AppLabel, Plugin};
 use bevy::ecs::schedule::{Stage, StageLabel};
 use bevy::ecs::world::World;
 use bevy::prelude::IntoExclusiveSystem;
+pub use recycle::{Garbage, GarbageBin};
 pub use window::RenderState;
 
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, AppLabel)]
@@ -349,7 +351,10 @@ impl Plugin for RenderPlugin {
                 RenderStage::Render,
                 SystemStage::parallel().with_system(window::render_system.exclusive_system()),
             )
-            .add_stage(RenderStage::Cleanup, SystemStage::parallel());
+            .add_stage(
+                RenderStage::Cleanup,
+                SystemStage::parallel().with_system(recycle::garbage_collection_system),
+            );
 
         unsafe {
             let entry = ash::Entry::new().unwrap();
@@ -359,6 +364,7 @@ impl Plugin for RenderPlugin {
             let (device, queues) = self.create_device(&instance, physical_device);
 
             render_app
+                .insert_resource(GarbageBin::new())
                 .insert_resource(ash::extensions::khr::AccelerationStructure::new(
                     &instance, &device,
                 ))

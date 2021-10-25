@@ -7,6 +7,7 @@
 #![feature(core_intrinsics)]
 #![feature(const_cstr_unchecked)]
 #![feature(adt_const_params)]
+#![feature(inline_const)]
 
 mod camera;
 mod device_info;

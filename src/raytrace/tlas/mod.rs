@@ -1,11 +1,11 @@
 mod state;
 mod uniform;
+use crate::render::{Garbage, GarbageBin};
+use ash::vk;
+use bevy::{ecs::system::SystemState, prelude::*, utils::HashMap};
 pub use state::TlasState;
 use std::mem::MaybeUninit;
 pub use uniform::UniformArray;
-
-use ash::vk;
-use bevy::{ecs::system::SystemState, prelude::*, utils::HashMap};
 
 use crate::render::{RenderStage, RenderWorld};
 use gpu_alloc_ash::AshMemoryDevice;
@@ -328,6 +328,7 @@ fn tlas_update(
         mut allocator,
         device_info,
         mut uniform_arr,
+        mut garbage_bin,
     ) = SystemState::<(
         Res<ash::Device>,
         ResMut<TlasState>,
@@ -336,6 +337,7 @@ fn tlas_update(
         ResMut<crate::Allocator>,
         Res<DeviceInfo>,
         ResMut<uniform::UniformArray>,
+        ResMut<GarbageBin>,
     )>::new(render_world)
     .get_mut(render_world);
 
@@ -635,12 +637,10 @@ fn tlas_update(
             .unwrap();
 
         println!("We did it");
-        /*
         if state.tlas != vk::AccelerationStructureKHR::null() {
-            acceleration_structure_loader.destroy_acceleration_structure(state.tlas, None);
+            garbage_bin.collect(Garbage::AccelerationStructure(state.tlas));
             state.tlas = vk::AccelerationStructureKHR::null();
         }
-        */
         // TODO: figure out a way to delete the AS
         if state.tlas_buf != vk::Buffer::null() {
             device.destroy_buffer(state.tlas_buf, None);
