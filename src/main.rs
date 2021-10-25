@@ -1,4 +1,5 @@
 use bevy::prelude::*;
+use dust_new::PerspectiveCamera;
 use dust_new::Raytraced;
 mod flycamera;
 fn main() {
@@ -29,7 +30,7 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
         })
         .insert(scene_handle)
         .insert(GlobalTransform::default())
-        .insert(Transform::from_xyz(0.0, 0.0, 0.0));
+        .insert(Transform::from_xyz(10.0, 10.0, 10.0));
     commands
         .spawn()
         .insert(Raytraced {
@@ -37,7 +38,16 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
         })
         .insert(watertank_handle)
         .insert(GlobalTransform::default())
-        .insert(Transform::from_xyz(0.0, 20.0, 0.0));
+        .insert(Transform::from_xyz(10.0, 15.0, 10.0));
+    
+    let mut transform = Transform::from_xyz(-1.0, -1.0, -1.0);
+    transform.look_at(Vec3::new(128.0, 128.0, 128.0), Vec3::Y);
+    commands
+        .spawn()
+        .insert(transform)
+        .insert(GlobalTransform::default())
+        .insert(PerspectiveCamera::default())
+        .insert(flycamera::FlyCamera::default());
     /*
     commands
         .spawn()

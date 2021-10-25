@@ -22,7 +22,7 @@ void main() {
             0xFF,           // cullMask
             0,              // sbtRecordOffset
             0,              // sbtRecordStride
-            1,              // missIndex
+            1,              // missIndex, use shadow.rmiss
             gl_WorldRayOriginEXT + gl_HitTEXT * gl_WorldRayDirectionEXT,     // ray origin
             0.01,           // ray min range
             -sunlight,  // ray direction

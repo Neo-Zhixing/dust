@@ -55,8 +55,8 @@ impl UniformArray {
         device: &ash::Device,
         allocator: &mut crate::Allocator,
     ) {
-        // Clean up the old ones
-        device.device_wait_idle().unwrap();
+        // TODO: free the command buffer.
+        /*
         if self.staging_buf != vk::Buffer::null() {
             device.destroy_buffer(self.staging_buf, None);
             self.staging_buf = vk::Buffer::null();
@@ -71,6 +71,7 @@ impl UniformArray {
         if let Some(device_mem) = self.device_mem.take() {
             allocator.dealloc(AshMemoryDevice::wrap(device), device_mem);
         }
+        */
 
         let size = UniformEntry::std140_size_static();
         let array_size = size as u64 * new_capacity as u64;

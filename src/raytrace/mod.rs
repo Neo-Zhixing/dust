@@ -5,6 +5,7 @@ mod ray_shaders;
 mod sbt;
 mod svdag;
 mod tlas;
+mod uniform;
 mod vox;
 
 use ash::vk;
@@ -21,7 +22,8 @@ use self::block_alloc::{
 pub use self::ray_shaders::RayShaders;
 use self::tlas::TlasState;
 use crate::device_info::DeviceInfo;
-use crate::Queues;
+use crate::{PerspectiveCamera, Queues};
+pub(crate) use uniform::RaytracingNodeViewConstants;
 
 use std::sync::Arc;
 
@@ -75,6 +77,10 @@ impl RaytracePlugin {
 
 impl Plugin for RaytracePlugin {
     fn build(&self, app: &mut App) {
+        app.add_plugin(crate::render::RenderPlugin {
+            uniform_size: std::mem::size_of::<RaytracingNodeViewConstants>() as u64,
+        });
+
         let render_app = app.sub_app(RenderApp);
         render_app.add_plugin(tlas::TlasPlugin::default());
         //render_app.add_system_to_stage(RenderStage::Prepare, update_desc_sets);
@@ -83,24 +89,14 @@ impl Plugin for RaytracePlugin {
         app.add_plugin(vox::VoxPlugin::default());
 
         app.sub_app(RenderApp)
+            .add_system_to_stage(RenderStage::Extract, uniform::extract_uniform_data)
+            .add_system_to_stage(RenderStage::Prepare, uniform::prepare_uniform_data)
             .init_resource::<ray_shaders::RayShaders>()
             .add_system_to_stage(
                 RenderStage::Queue,
                 commands::record_raytracing_commands_system,
             );
     }
-}
-
-struct RaytracingNodeViewConstants {
-    pub camera_view_col0: [f32; 3],
-    pub padding0: f32,
-    pub camera_view_col1: [f32; 3],
-    pub padding1: f32,
-    pub camera_view_col2: [f32; 3],
-    pub padding2: f32,
-
-    pub camera_position: Vec3,
-    pub tan_half_fov: f32,
 }
 
 // This system makes sure that RayShaders.target_img_desc_set always points to the correct acceleration structure and buffer

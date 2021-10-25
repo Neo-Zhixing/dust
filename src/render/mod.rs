@@ -23,8 +23,9 @@ pub enum RenderStage {
     Cleanup,
 }
 
-#[derive(Default)]
-pub struct RenderPlugin {}
+pub struct RenderPlugin {
+    pub uniform_size: vk::DeviceSize,
+}
 
 impl RenderPlugin {
     #[allow(unused_variables)]
@@ -422,7 +423,9 @@ impl Plugin for RenderPlugin {
             }
         });
 
-        app.add_plugin(window::WindowRenderPlugin::default());
+        app.add_plugin(window::WindowRenderPlugin {
+            uniform_buffer_size: self.uniform_size,
+        });
     }
 }
 

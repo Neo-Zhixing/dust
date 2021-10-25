@@ -1,3 +1,5 @@
+use crate::VulkanAllocator;
+
 use super::swapchain::SwapchainImage;
 use ash::vk;
 use bevy::app::{App, Plugin};
@@ -6,8 +8,10 @@ use bevy::ecs::system::SystemState;
 use bevy::prelude::*;
 use bevy::utils::HashMap;
 use bevy::window::{WindowId, Windows};
+use std::ffi::c_void;
 use std::mem::MaybeUninit;
 use std::ops::DerefMut;
+use std::ptr::NonNull;
 
 use super::swapchain::SurfaceState;
 pub const NUM_FRAMES_IN_FLIGHT: u32 = 3;
@@ -19,6 +23,9 @@ pub struct RenderState {
     pub current_frame: u32,
     pub frames_in_flight: [Frame; NUM_FRAMES_IN_FLIGHT as usize],
 
+    pub device_uniform_buffer: vk::Buffer,
+    pub device_uniform_memory: crate::MemoryBlock,
+    pub host_uniform_memory: crate::MemoryBlock,
     // The command pool for per-frame rendering commands. NUM_FRAMES_IN_FLIGHT commands will be allocated from this.
     pub command_pool: vk::CommandPool,
 
@@ -26,7 +33,12 @@ pub struct RenderState {
 }
 
 impl RenderState {
-    pub unsafe fn new(device: &ash::Device, queues: &crate::Queues) -> Self {
+    pub unsafe fn new(
+        device: &ash::Device,
+        queues: &crate::Queues,
+        allocator: &mut crate::Allocator,
+        uniform_buffer_size: vk::DeviceSize,
+    ) -> Self {
         let mut frames_in_flight: [MaybeUninit<Frame>; NUM_FRAMES_IN_FLIGHT as usize] =
             MaybeUninit::uninit_array();
 
@@ -56,6 +68,15 @@ impl RenderState {
         );
         assert_eq!(result, vk::Result::SUCCESS);
         for (i, frame) in frames_in_flight.iter_mut().enumerate() {
+            let uniform_buffer = device
+                .create_buffer(
+                    &vk::BufferCreateInfo::builder()
+                        .size(uniform_buffer_size)
+                        .usage(vk::BufferUsageFlags::TRANSFER_SRC)
+                        .build(),
+                    None,
+                )
+                .unwrap();
             frame.write(Frame {
                 index: i as u32,
                 render_finished_semaphore: device
@@ -70,6 +91,8 @@ impl RenderState {
                     )
                     .unwrap(),
                 command_buffer: command_buffers[i],
+                uniform_buffer,
+                uniform_buffer_ptr: std::ptr::null_mut(),
             });
         }
         let per_window_desc_set_layout = device
@@ -80,6 +103,12 @@ impl RenderState {
                         vk::DescriptorSetLayoutBinding::builder()
                             .binding(0)
                             .descriptor_type(vk::DescriptorType::STORAGE_IMAGE)
+                            .descriptor_count(1)
+                            .stage_flags(vk::ShaderStageFlags::RAYGEN_KHR)
+                            .build(),
+                        vk::DescriptorSetLayoutBinding::builder()
+                            .binding(1)
+                            .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
                             .descriptor_count(1)
                             .stage_flags(vk::ShaderStageFlags::RAYGEN_KHR)
                             .build(),
@@ -103,25 +132,76 @@ impl RenderState {
                 None,
             )
             .unwrap();
+
+        let mut frames_in_flight: [Frame; NUM_FRAMES_IN_FLIGHT as usize] =
+            std::mem::transmute(frames_in_flight);
+        let device_uniform_buffer = device
+            .create_buffer(
+                &vk::BufferCreateInfo::builder()
+                    .size(uniform_buffer_size)
+                    .usage(
+                        vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::UNIFORM_BUFFER,
+                    )
+                    .build(),
+                None,
+            )
+            .unwrap();
+        let device_uniform_memory = allocator.alloc_for_buffer(
+            device,
+            device_uniform_buffer,
+            gpu_alloc::UsageFlags::FAST_DEVICE_ACCESS,
+        );
+
+        let host_uniform_memory = {
+            use gpu_alloc::{Request, UsageFlags};
+            let requirements =
+                device.get_buffer_memory_requirements(frames_in_flight[0].uniform_buffer); // Buffer memory requirements were assumed to be the same.
+            let layout = std::alloc::Layout::from_size_align(
+                requirements.size as usize,
+                requirements.alignment as usize,
+            )
+            .unwrap();
+            let (full_layout, spacing) = layout.repeat(frames_in_flight.len()).unwrap();
+            let mut mem = allocator.alloc_with_device(
+                device,
+                Request {
+                    size: full_layout.size() as u64,
+                    align_mask: full_layout.align() as u64,
+                    memory_types: requirements.memory_type_bits,
+                    usage: UsageFlags::UPLOAD,
+                },
+            );
+            let ptr = mem
+                .map(
+                    gpu_alloc_ash::AshMemoryDevice::wrap(device),
+                    0,
+                    full_layout.size(),
+                )
+                .unwrap()
+                .as_ptr();
+            for (i, frame) in frames_in_flight.iter_mut().enumerate() {
+                let offset = mem.offset() + (i * layout.pad_to_align().size()) as u64;
+                device
+                    .bind_buffer_memory(frame.uniform_buffer, *mem.memory(), offset)
+                    .unwrap();
+                frame.uniform_buffer_ptr = ptr.add(layout.pad_to_align().size() * i) as *mut c_void;
+            }
+            mem
+        };
         Self {
             windows: HashMap::default(),
             current_frame: 0,
-            frames_in_flight: std::mem::transmute(frames_in_flight),
+            frames_in_flight,
             command_pool,
             per_window_desc_set_layout,
+            host_uniform_memory,
+            device_uniform_memory,
+            device_uniform_buffer,
         }
     }
 
     pub fn current_frame(&self) -> &Frame {
         &self.frames_in_flight[self.current_frame as usize]
-    }
-}
-
-impl FromWorld for RenderState {
-    fn from_world(world: &mut World) -> Self {
-        let device = world.get_resource::<ash::Device>().unwrap();
-        let queues = world.get_resource::<crate::Queues>().unwrap();
-        unsafe { Self::new(device, queues) }
     }
 }
 
@@ -131,7 +211,13 @@ pub struct Frame {
     pub(crate) render_finished_semaphore: vk::Semaphore,
     pub(crate) fence: vk::Fence,
     pub(crate) command_buffer: vk::CommandBuffer,
+
+    pub uniform_buffer: vk::Buffer, // On host
+    pub uniform_buffer_ptr: *mut c_void,
 }
+
+unsafe impl Send for Frame {}
+unsafe impl Sync for Frame {}
 
 pub struct ExtractedWindow {
     pub id: WindowId,
@@ -150,14 +236,25 @@ pub struct ExtractedWindow {
 #[derive(Default)]
 pub struct NonSendMarker;
 
-#[derive(Default)]
-pub struct WindowRenderPlugin;
+pub struct WindowRenderPlugin {
+    pub uniform_buffer_size: vk::DeviceSize,
+}
 
 impl Plugin for WindowRenderPlugin {
     fn build(&self, app: &mut App) {
         let render_app = app.sub_app(super::RenderApp);
+
+        let (device, queues, mut allocator) = SystemState::<(
+            Res<ash::Device>,
+            Res<crate::Queues>,
+            ResMut<crate::Allocator>,
+        )>::new(&mut render_app.world)
+        .get_mut(&mut render_app.world);
+
+        let render_state =
+            unsafe { RenderState::new(&device, &queues, &mut allocator, self.uniform_buffer_size) };
         render_app
-            .init_resource::<RenderState>()
+            .insert_resource(render_state)
             .init_resource::<NonSendMarker>()
             .add_system_to_stage(super::RenderStage::Extract, extract_windows)
             .add_system_to_stage(super::RenderStage::Prepare, prepare_windows)

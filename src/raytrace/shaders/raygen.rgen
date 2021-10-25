@@ -6,24 +6,26 @@
 
 layout(location = 0) rayPayloadEXT RayPayload payload;
 layout(set = 0, binding = 0) uniform writeonly image2D imgOutput;
+layout(set = 0, binding = 1) uniform readonly u_ViewConstants {
+  mat3 rotation;
+  vec3 position;
+  float tanHalfFov;
+} ViewConstants;
 //layout(set = 0, binding = 1) uniform sampler2D depthTexture;
 layout(set = 0, binding = 2) uniform accelerationStructureEXT accelerationStructure;
 
 void main() {
-    imageStore(imgOutput, ivec2(gl_LaunchIDEXT.xy), vec4(0.5, 1.0, 0.0, 1.0));
-    /*
-return;
     const vec2 pixelNDC = (vec2(gl_LaunchIDEXT.xy) + vec2(0.5)) / vec2(gl_LaunchSizeEXT.xy);
     const float near = 0.1; // Near plane was assumed to be at 0.1
-    float z = near / texture(depthTexture, pixelNDC).r; // depth obtained from rasterization
-
+    //float z = near / texture(depthTexture, pixelNDC).r; // depth obtained from rasterization
+    float z = 10000;
 
     vec2 pixelCamera = 2 * pixelNDC - 1;
     pixelCamera.y *= -1;
     pixelCamera.x *= float(gl_LaunchSizeEXT.x) / float(gl_LaunchSizeEXT.y);
-    pixelCamera *= PushConstants.tanHalfFov;
+    pixelCamera *= ViewConstants.tanHalfFov;
 
-    vec3 pixelCameraWorld =  PushConstants.rotation * vec3(pixelCamera, -1);
+    vec3 pixelCameraWorld =  ViewConstants.rotation * vec3(pixelCamera, -1);
 
 
   payload.color = vec3(0.0, 0.0, 0.0);
@@ -34,15 +36,12 @@ return;
         0,              // sbtRecordOffset
         0,              // sbtRecordStride
         0,              // missIndex
-        PushConstants.position,     // ray origin
+        ViewConstants.position,     // ray origin
         near,           // ray min range
         pixelCameraWorld,  // ray direction
         z + 0.001,           // ray max range
         0               // payload (location = 0)
   );
 
-  if (payload.didHit) {
-    imageStore(imgOutput, ivec2(gl_LaunchIDEXT.xy), vec4(payload.color, 1.0));
-  }
-  */
+  imageStore(imgOutput, ivec2(gl_LaunchIDEXT.xy), vec4(payload.color, 1.0));
 }

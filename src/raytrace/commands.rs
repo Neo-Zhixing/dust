@@ -1,10 +1,10 @@
-use crate::raytrace::RayShaders;
+use crate::{raytrace::RayShaders, render};
 use ash::vk;
 use bevy::ecs::prelude::*;
 
 use crate::render::RenderState;
 
-pub fn record_raytracing_commands_system(
+pub(super) fn record_raytracing_commands_system(
     device: Res<ash::Device>,
     render_state: Res<RenderState>,
     ray_shaders: Res<RayShaders>,
@@ -12,6 +12,7 @@ pub fn record_raytracing_commands_system(
     raytracing_pipeline_loader: Res<ash::extensions::khr::RayTracingPipeline>,
     queues: Res<crate::Queues>,
     tlas_state: Res<super::TlasState>,
+    view_constants: Res<super::RaytracingNodeViewConstants>,
 ) {
     let current_frame = render_state.current_frame().clone();
     assert_eq!(
@@ -69,7 +70,17 @@ pub fn record_raytracing_commands_system(
                     .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
                     .buffer_info(&[vk::DescriptorBufferInfo {
                         buffer: entity_mapping_table.get_buffer(),
-                        range: entity_mapping_table.get_full_size(),
+                        range: vk::WHOLE_SIZE,
+                        offset: 0,
+                    }])
+                    .build(),
+                vk::WriteDescriptorSet::builder()
+                    .dst_set(swapchain_image.desc_set)
+                    .dst_binding(1)
+                    .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
+                    .buffer_info(&[vk::DescriptorBufferInfo {
+                        buffer: render_state.device_uniform_buffer,
+                        range: vk::WHOLE_SIZE,
                         offset: 0,
                     }])
                     .build(),
@@ -113,6 +124,16 @@ pub fn record_raytracing_commands_system(
                 src_offset: 0,
                 dst_offset: 0,
                 size: entity_mapping_table.get_full_size(),
+            }],
+        );
+        device.cmd_copy_buffer(
+            command_buffer,
+            current_frame.uniform_buffer,
+            render_state.device_uniform_buffer,
+            &[vk::BufferCopy {
+                src_offset: 0,
+                dst_offset: 0,
+                size: std::mem::size_of::<super::RaytracingNodeViewConstants>() as u64,
             }],
         );
 
