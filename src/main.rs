@@ -44,7 +44,7 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
         .insert(watertank_handle)
         .insert(GlobalTransform::default())
         .insert(Watertank)
-        .insert(Transform::from_xyz(10.0, 15.0, 10.0));
+        .insert(Transform::from_xyz(40.0, 15.0, 40.0));
 
     let mut transform = Transform::from_xyz(64.0, 64.0, 64.0);
     transform.look_at(Vec3::new(128.0, 128.0, 128.0), Vec3::Y);
