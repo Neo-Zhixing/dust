@@ -92,6 +92,7 @@ impl RenderState {
                 command_buffer: command_buffers[i],
                 uniform_buffer,
                 uniform_buffer_ptr: std::ptr::null_mut(),
+                command_buffer_needs_update: true,
             });
         }
         let per_window_desc_set_layout = device
@@ -202,6 +203,16 @@ impl RenderState {
     pub fn current_frame(&self) -> &Frame {
         &self.frames_in_flight[self.current_frame as usize]
     }
+
+    pub fn current_frame_mut(&mut self) -> &mut Frame {
+        &mut self.frames_in_flight[self.current_frame as usize]
+    }
+
+    pub fn command_buffer_flush_all_frames(&mut self) {
+         for frame in self.frames_in_flight.iter_mut() {
+            frame.command_buffer_needs_update = true;
+         }
+    }
 }
 
 #[derive(Clone)]
@@ -210,6 +221,7 @@ pub struct Frame {
     pub(crate) render_finished_semaphore: vk::Semaphore,
     pub(crate) fence: vk::Fence,
     pub(crate) command_buffer: vk::CommandBuffer,
+    pub(crate) command_buffer_needs_update: bool,
 
     pub uniform_buffer: vk::Buffer, // On host
     pub uniform_buffer_ptr: *mut c_void,
@@ -317,10 +329,13 @@ pub fn prepare_windows(
             .unwrap();
     }
 
+    let mut needs_update_command_buffer = false;
+
     for window in render_state.windows.values_mut() {
         let surface_state = match &mut window.state {
             Some(state) => unsafe {
                 if window.size_changed {
+                    needs_update_command_buffer = true;
                     state.destroy_swapchain(&device, &swapchain_loader);
                     state.build_swapchain(
                         render_state.per_window_desc_set_layout,
@@ -343,6 +358,7 @@ pub fn prepare_windows(
                     &surface_loader,
                     &window.handle,
                 );
+                needs_update_command_buffer = true;
                 state.build_swapchain(
                     render_state.per_window_desc_set_layout,
                     &instance,
@@ -364,6 +380,10 @@ pub fn prepare_windows(
             device.reset_fences(&[frame_in_flight.fence]).unwrap();
         }
         window.swapchain_image = Some(swapchain_image)
+    }
+
+    if needs_update_command_buffer {
+        render_state.command_buffer_flush_all_frames();
     }
 }
 

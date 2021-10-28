@@ -6,7 +6,7 @@ use crate::render::RenderState;
 
 pub(super) fn record_raytracing_commands_system(
     device: Res<ash::Device>,
-    render_state: Res<RenderState>,
+    mut render_state: ResMut<RenderState>,
     ray_shaders: Res<RayShaders>,
     entity_mapping_table: Res<super::tlas::UniformArray>,
     raytracing_pipeline_loader: Res<ash::extensions::khr::RayTracingPipeline>,
@@ -14,6 +14,10 @@ pub(super) fn record_raytracing_commands_system(
     tlas_state: Res<super::TlasState>,
 ) {
     let current_frame = render_state.current_frame().clone();
+    if !current_frame.command_buffer_needs_update {
+        return;
+    }
+    render_state.current_frame_mut().command_buffer_needs_update = false;
     assert_eq!(
         render_state.windows.len(),
         1,

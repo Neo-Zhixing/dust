@@ -1,6 +1,6 @@
 mod state;
 mod uniform;
-use crate::render::{Garbage, GarbageBin};
+use crate::render::{Garbage, GarbageBin, RenderState};
 use ash::vk;
 use bevy::{ecs::system::SystemState, prelude::*, utils::HashMap};
 pub use state::TlasState;
@@ -323,6 +323,7 @@ fn tlas_update(
     let (
         device,
         mut state,
+        mut render_state,
         queues,
         acceleration_structure_loader,
         mut allocator,
@@ -332,6 +333,7 @@ fn tlas_update(
     ) = SystemState::<(
         Res<ash::Device>,
         ResMut<TlasState>,
+        ResMut<RenderState>,
         Res<Queues>,
         Res<ash::extensions::khr::AccelerationStructure>,
         ResMut<crate::Allocator>,
@@ -657,5 +659,6 @@ fn tlas_update(
         state.tlas_buf = as_buf;
         state.tlas_mem = Some(as_mem);
         state.did_updates();
+        render_state.command_buffer_flush_all_frames();
     }
 }

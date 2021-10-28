@@ -79,6 +79,8 @@ impl SurfaceState {
         device: &ash::Device,
         swapchain_loader: &ash::extensions::khr::Swapchain,
     ) {
+        device.device_wait_idle().unwrap();
+        // We have to reallocate descriptor sets here, because we might have a different number of desc sets in our next frame.
         device
             .reset_descriptor_pool(self.desc_pool, vk::DescriptorPoolResetFlags::empty())
             .unwrap();
